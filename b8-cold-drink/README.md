@@ -13,13 +13,13 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 | `inputs_original.toml` | The physics of the first `b8_simple.py`, for comparison. |
 | `b8_model.py` | The physics. You should not need to edit it for a new measurement. |
 | `b8_simple.py` | One run from the command line: a table, a summary and a picture. |
-| `b8_app.py` | The same model behind sliders, with a live drawing of the tank. |
+| `b8_app.py` | The same model behind sliders (each with a box to type a number into), with a live drawing of the tank. |
 | `b8_plots.py` | The tank drawing and the graphs, shared by the two programs above. |
 | `b8_controls.py` | Which inputs get a slider or a switch, in the app and on the web page. |
 | `web/` | The web simulator: the same model, run in a browser. |
 | `test_b8.py` | Checks on the model. Run it after changing `b8_model.py`. |
 | `b8_sim.py` | The older one-lump equilibrium model behind the report (unchanged). |
-| `B8-salted-ice-bath.tex` / `.pdf` | Write-up of the `b8_sim.py` model. |
+| `B8-salted-ice-bath.tex` / `.pdf` | Write-up of the `b8_sim.py` model, and (section 12) of the simulator and the heat spreading. |
 | `figs/`, `fonts/` | Figures and fonts for the report. |
 
 Keep everything in this one folder. The programs and the `.tex` find the other
@@ -46,12 +46,16 @@ On a machine with no display, set `MPLBACKEND=Agg` (or pass `--no-show`).
 Python 3.11 or later is needed (for `tomllib`).
 
 With the numbers in `inputs.toml`, `b8_simple.py` prints
-`drink reaches 5 C 169 s after it goes in` and an energy check of about 0 J.
+`drink reaches 5 C 202 s after it goes in` and an energy check of about 0 J.
 With `--inputs inputs_original.toml` it gives the first version's 178 s.
 
-**The app.** Move a slider and the whole run repeats in under a second. Drag the
+**The app.** Move a slider, or type a number in the box beside it and press Enter, and
+the whole run repeats in under a second. A typed number is used exactly as typed, even
+outside the slider's range, and the slider widens to follow it. Drag the
 time slider, press Play, or use the arrow keys to watch the tank. The tank is
-coloured by temperature: blue below 0 °C, red above. The can stands beside the box
+coloured by temperature: blue below 0 °C, red above. The brine is drawn ring by ring
+around the can, so the warmer brine next to the can shows, and each ring's ice is drawn at
+that ring's piece size. The can stands beside the box
 until it goes in. Once the drink starts to freeze, the ice in the can is hatched.
 *Save inputs* writes the current settings to `inputs_saved_<time>.toml`, which
 `b8_simple.py --inputs` can run again.
@@ -61,9 +65,10 @@ until it goes in. Once the drink starts to freeze, the ice in the can is hatched
 `web/` runs the model in a browser. It loads [Pyodide](https://pyodide.org) (Python
 compiled for the browser, about 12 MB the first time, then cached) and copies in
 `b8_model.py`, `b8_controls.py` and `inputs.toml` unchanged. A change to the model is a
-change to the web page too, with nothing to port. A run takes about 0.4 s.
+change to the web page too, with nothing to port. A run takes about 1 s.
 
-- **Quick controls**: the same sliders and switches as `b8_app.py`.
+- **Quick controls**: the same sliders and switches as `b8_app.py`, each with a box to
+  type the number into.
 - **All inputs**: every number in `inputs.toml`, with its unit, tag and note, built from
   the file's comments. You can filter them, or show only what still needs measuring.
 - **The tank**: coloured by temperature, with Play and a time slider. Click a graph to
@@ -114,30 +119,38 @@ These are the ones that matter:
 
 | Input | Range tried | Time to 5 °C | Bath when the drink goes in |
 |---|---|---|---|
-| `can_heat_transfer.outside_h` | ÷3 to ×3 | 374 to 101 s | – |
-| `can_heat_transfer.measured_U`, if you measure it | 120 to 200 W/(m² K) | 234 to 141 s | – |
-| `can.held_down` | held / floating | 169 / 249 s | – |
-| `drink.mass`, `drink.heat_capacity` | ±20 % | 204 to 135 s | – |
-| `ice.brine_to_ice_h` | ÷3 to ×3 | 189 to 166 s | −17.4 to −21.1 °C |
-| `can_heat_transfer.inside_h` | ±20 % | 185 to 158 s | – |
-| `drink.start_temperature` | ±2 K | 180 to 158 s | – |
-| `salt.dissolve_coefficient` | ÷3 to ×3 | 178 to 169 s | −18.9 to −20.8 °C |
-| `ice.surface_model` | bulk / salt-limited | 169 / 239 s | −20.7 / −11.4 °C |
+| `can_heat_transfer.outside_h` | ÷3 to ×3 | 407 to 133 s | – |
+| `can_heat_transfer.measured_U`, if you measure it | 120 to 200 W/(m² K) | 265 to 171 s | – |
+| `heat_spreading.convection_factor` | 1 (still) / 5 to 100 / inf (mixed) | 318 / 242 to 180 / 169 s | −19.4 / −20.0 to −20.6 / −20.7 °C |
+| `can.held_down` | held / floating | 202 / 284 s | – |
+| `drink.mass`, `drink.heat_capacity` | ±20 % | 245 to 161 s | – |
+| `ice.brine_to_ice_h` | ÷3 to ×3 | 231 to 190 s | −16.9 to −21.0 °C |
+| `can_heat_transfer.inside_h` | ±20 % | 219 to 191 s | – |
+| `drink.start_temperature` | ±2 K | 216 to 189 s | – |
+| `salt.dissolve_coefficient` | ÷3 to ×3 | 212 to 202 s | −18.5 to −20.5 °C |
+| `ice.piece_size` | ±20 % | 200 to 205 s | −20.7 to −20.1 °C |
+| `ice.surface_model` | bulk / salt-limited | 202 / 294 s | −20.4 / −10.9 °C |
 
-Everything else changes the time by 2 s or less and the bath by 0.25 K or less.
-That leads to two cheap experiments:
+Everything else changes the time by 0.5 s or less and the bath by 0.25 K or less.
+That leads to three cheap experiments:
 
-1. **A drink run, logging both the drink and the brine.** Plot
+1. **A drink run, logging the drink and the brine within about 5 mm of the can.** Plot
    ln(T_drink − T_brine) against time. The slope is −1/τ, and
    U = C_drink / (τ · can area). Put U in `can_heat_transfer.measured_U`, and it
-   replaces the two film coefficients. This pins down the rate.
-2. **A blank run: make up the bath, no drink, log the brine for 15 min.** This pins
+   replaces the two film coefficients. This pins down the rate. If the brine probe
+   is out in the bulk instead, the U you fit already includes the heat spreading:
+   then also set `heat_spreading.convection_factor = inf`.
+2. **The same run with a second brine probe in the bulk, 5 cm or more from the can.**
+   The gap between the two probes measures `convection_factor`: with the default 20
+   the brine next to the can peaks at −14 °C while the bulk stays at −20.4 °C; still
+   brine (1) would make the gap bigger, a stirred bath (100) smaller.
+3. **A blank run: make up the bath, no drink, log the brine for 15 min.** This pins
    `brine_to_ice_h` and `dissolve_coefficient`. It also decides the ice surface
-   model: "bulk" predicts −20.7 °C at 15 min, "salt-limited" predicts −11.4 °C.
+   model: "bulk" predicts −20.4 °C at 15 min, "salt-limited" predicts −10.9 °C.
 
 Weigh the drink (full can minus empty), and take its heat capacity from the sugar
 on the label (about 4180 × (1 − 0.6 × sugar fraction) J/(kg K)). **Hold the can down:**
-a full can floats in brine with only about 73 % of it under, and takes about 50 % longer (249 s, not 169 s).
+a full can floats in brine with only about 73 % of it under, and takes about 40 % longer (284 s, not 202 s).
 `python3 b8_simple.py --list-inputs` prints the whole checklist.
 
 ## The physics
@@ -147,6 +160,62 @@ brine plus ice plus salt crystals. Salt dissolves and ice melts at finite rates.
 Heat flows between room, foam, glass, brine, ice and drink. The model steps the
 heat contents forward in time, so energy is conserved to about 10⁻⁹ J, and every
 run prints that check.
+
+### Heat spreading through the bath
+
+The first version took the bath as perfectly mixed: the drink's heat reached every
+gram of brine and ice the moment it left the can. Still brine is a poor conductor,
+though. Its conductivity is about 0.54 W/(m K) at the eutectic (Melinder, 2010), so its
+heat diffusivity is about 0.14 mm²/s, and in 3 minutes conduction alone carries heat
+only about 5 mm from the can. The brine next to the can warms, its ice melts first,
+and the drink then sees warmer brine than the bulk, so it cools more slowly.
+
+The model now splits the bath into rings around the can (`heat_spreading.rings`,
+default 8). They run from the can out to a circle with the same area as the tank floor
+(radius 11.5 cm), thin next to the can (0.56 cm) and wider further out. Each ring has
+its own brine temperature, ice and salt crystals. The salt concentration is taken the
+same in every ring, since the brine that moves the heat also mixes the salt. The drink's
+heat goes into the inner ring; the heat from the glass, the lid and the stirrer goes
+into the outer one. Between neighbouring rings heat flows by conduction through a
+cylindrical shell,
+
+    G = 2π · k_eff · (brine depth) / ln(r_outer / r_inner),   k_eff = convection_factor × k_brine,
+
+stepped implicitly (backward Euler), so it is stable however thin the rings are.
+
+Still brine is the lower limit. Ice conducts four times better than brine, so a still
+bed of ice and brine already conducts 2–3 times what brine alone does. And the brine
+moves through the bed by natural convection: brine cooled by the ice sinks, and brine
+warmed by the can rises. Treating the bed (2 cm pieces, 40 % gaps) as a porous medium
+gives a Darcy–Rayleigh number of 10²–10³ and a convective Nusselt number of 9–27
+(Cheng & Minkowycz, 1977), so together f ≈ 20–60. That estimate is rough: the gaps are
+not small next to the 2 mm boundary layer on the can, and the warm brine rising up the
+can spreads along the top of the bath rather than through its depth.
+`convection_factor = 20` takes the low end (ASSUMED); 1 is still brine, and inf is
+the perfectly mixed bath, which reproduces the first version exactly. Between 20 and 60
+the time to 5 °C only moves from 202 to 185 s, because by then the can's own films
+dominate; below 10 it rises quickly (10: 219 s, 3: 263 s).
+
+With the defaults the drink reaches 5 °C in 202 s (perfectly mixed: 169 s). The brine
+next to the can peaks at −14.1 °C while the bulk stays at −20.4 °C, and the ice within
+0.6 cm of the can falls from 92 g to 39 g. The brine-side film coefficient `outside_h`
+(270 W/(m² K)) is left as it was: a free-convection estimate for brine on a 12 cm
+vertical can (Churchill–Chu) gives 230–380 W/(m² K) for a 5–25 K difference, a film
+about 2 mm thick, inside the 5.6 mm inner ring.
+
+Time to 5 °C against the number of rings (1 ring is the perfectly mixed bath):
+
+| `convection_factor` | 1 ring | 4 rings | 8 rings | 16 rings | 32 rings | 50 rings |
+|---|---|---|---|---|---|---|
+| 1 (still brine) | 169 s | 240 s | 318 s | 377 s | 411 s | 424 s |
+| 5 | 169 s | 218 s | 242 s | 256 s | 263 s | 266 s |
+| 20 (default) | 169 s | 196 s | 202 s | 206 s | 208 s | 209 s |
+| 100 | 169 s | 178 s | 180 s | 180 s | 181 s | 181 s |
+
+At the default, 8 rings are within 3 % of 50 (the most allowed). In still brine the
+warm layer against the can is much thinner than the inner ring, so it takes many more
+rings to resolve; use 50 if you set `convection_factor` below about 5.
+`python3 b8_simple.py --report-figure` redraws the report's figure of all this.
 
 ### What changed from the first version
 
@@ -163,7 +232,8 @@ Each change was switched on alone, on top of the first version's physics:
 | Brine heat capacity and density fitted to data | Melinder (2010). The old lines were off by up to 156 J/(kg K) and 17 kg/m³ | 178 s | −20.00 °C |
 | Halite solubility 35.65 g/100 g at 0 °C | Matches handbooks and meets the peritectic. The old fit left a 0.2 wt % step there | 178 s | −20.11 °C |
 | The foam holds heat (box starts at room temperature) | The box gives up about 6 kJ as it cools, mostly in the first 15 min: as much as melting 19 g of ice | 169 s | −20.71 °C |
-| **All of these (`inputs.toml`)** | | **169 s** | **−20.71 °C** |
+| The drink's heat spreads through the bath at a finite rate (8 rings, convection factor 20) | Still brine conducts 0.54 W/(m K); the ice and convection through the ice bed raise that 20–60 times, but not to infinity | 209 s | −19.79 °C |
+| **All of these (`inputs.toml`)** | | **202 s** | **−20.42 °C** |
 
 Also new:
 - stirrer heat (`stirrer.power`);
@@ -182,24 +252,34 @@ coefficients and the solubility line.
   the brine at the ice surface, so melting below 0 °C has to wait for salt to arrive
   (the three-equation ice/ocean interface: Holland & Jenkins, 1999). Salt diffuses
   about 100 times more slowly than heat, so this could matter a lot. It makes the
-  time to 5 °C 200–300 s, depending on `heat_to_salt_ratio`. "Bulk" stays the
-  default for three reasons. It matches SINTEF's ~2.5 min for a 0.33 L can in
-  salted ice water. Salt mixed in among the ice puts brine straight onto the ice.
+  time to 5 °C 245–420 s, for `heat_to_salt_ratio` 10–200 (294 s at the default 30).
+  "Bulk" stays the default for three reasons. It is the closer to SINTEF's ~2.5 min
+  for a 0.33 L can in salted ice water. Salt mixed in among the ice puts brine straight onto the ice.
   And the blank run above can decide between the two.
 - `salt.dissolves_as`: "halite" (default) or "hydrohalite" (a crust of NaCl·2H₂O
   on the grains).
 - `drink.freezes`, `drink.supercooling`: how the drink freezes.
 - `can_heat_transfer.inside_power_law` and `outside_power_law`: free convection
   (h ∝ ΔT^¼) on each side of the can. Switching on the brine side as well gives
-  162 s. That is the consistent choice for an unstirred bath, but `outside_h` was
+  199 s. That is the consistent choice for an unstirred bath, but `outside_h` was
   chosen as a constant to match SINTEF, so refit it if you switch this on.
 - `can_heat_transfer.measured_U`: a measured U, which replaces both films.
+- `heat_spreading.convection_factor`: how fast the drink's heat spreads into the bath,
+  from 1 (still brine) to inf (perfectly mixed, the first version). It has a slider; type
+  inf in its box for a perfectly mixed bath. `heat_spreading.rings`: how finely the bath
+  is split.
 - `can.held_down`: the can held at its base height, or floating.
 
 ### What the model still leaves out
 
-- **One brine temperature.** There is no stratification. In an unstirred bath,
+- **No layers from top to bottom.** The bath is split into rings around the can, but
+  each ring has one temperature from the floor to the surface. In an unstirred bath,
   cold dense brine sits on the floor and fresh meltwater sits at the top (report §9).
+- **Convection as a conductivity.** The brine's movement through the ice is taken as a
+  fixed multiple of still brine's conductivity. Real convection depends on the
+  temperature differences that drive it, and differs above and below the can.
+- **A round tank.** The rings are circles around the can with the same total area as
+  the rectangular tank floor.
 - **One drink temperature.** The 4 °C density maximum and the slush that stops
   convection in a freezing can are not modelled.
 - **Ice touching the can.** Crushed ice pressed against the can would conduct heat
@@ -214,6 +294,14 @@ coefficients and the solubility line.
 
 ## Building the report
 
+GitHub builds the PDF: the **B8 report** workflow (`.github/workflows/b8-report.yml`)
+installs XeLaTeX on GitHub's runner, compiles `B8-salted-ice-bath.tex` and commits
+`B8-salted-ice-bath.pdf` back. It runs by itself when a push to main changes the
+report or its figures; to rebuild by hand, or for another branch, open Actions →
+B8 report → Run workflow. The PDF and the TeX log are also kept with each run.
+
+To build it yourself instead:
+
 ```
 xelatex B8-salted-ice-bath.tex
 xelatex B8-salted-ice-bath.tex
@@ -223,7 +311,9 @@ Run it twice so that the cross-references resolve. The report needs XeLaTeX beca
 loads its fonts with `fontspec`. The maths font, Latin Modern Math, is not in `fonts/`.
 It comes with TeX Live and MiKTeX. On Overleaf, upload the whole folder and set the
 compiler to XeLaTeX. The report describes `b8_sim.py` and quotes its lines 111–189,
-so that file is left exactly as it was.
+so that file is left exactly as it was. Its section 12 describes the simulator
+(`b8_model.py`) and the heat spreading; its figure `figs/f9_spreading.pdf` is redrawn by
+`python3 b8_simple.py --report-figure`.
 
 ## Fonts
 

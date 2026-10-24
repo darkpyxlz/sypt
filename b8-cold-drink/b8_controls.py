@@ -9,7 +9,8 @@ from b8_model import CHOICES
 
 # (section, key, label, low, high, step, unit shown, how to show it)
 # "how to show it" is the factor from the SI value in inputs.toml to the unit
-# shown, or 'log' for a slider that moves in powers of ten.
+# shown, or 'log' for a slider that moves in powers of ten.  Typing inf in a
+# slider's box is allowed (convection factor inf = a perfectly mixed bath).
 SLIDERS = [
     ('ice', 'mass', 'ice', 0.5, 8.0, 0.1, 'kg', 1),
     ('water', 'mass', 'water', 0.0, 5.0, 0.1, 'kg', 1),
@@ -23,6 +24,7 @@ SLIDERS = [
     ('can_heat_transfer', 'outside_h', 'h brine side of can', 50.0, 1500.0, 10.0, 'W/m²K', 1),
     ('can_heat_transfer', 'inside_h', 'h drink side of can', 50.0, 1500.0, 10.0, 'W/m²K', 1),
     ('can_heat_transfer', 'measured_U', 'measured U (0: use h)', 0.0, 600.0, 5.0, 'W/m²K', 1),
+    ('heat_spreading', 'convection_factor', 'heat spreading in bath', 0.0, 3.0, 0.05, '× still', 'log'),
     ('ice', 'brine_to_ice_h', 'h brine to ice', 20.0, 600.0, 5.0, 'W/m²K', 1),
     ('ice', 'piece_size', 'ice piece size', 0.5, 5.0, 0.1, 'cm', 100),
     ('salt', 'grain_size', 'salt grain size', 0.1, 3.0, 0.05, 'mm', 1000),

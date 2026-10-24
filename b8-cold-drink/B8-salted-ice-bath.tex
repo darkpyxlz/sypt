@@ -75,6 +75,10 @@ bath together (\code{b8\_sim.py}), and records what the simulation says about th
 measurements were taken; every number below is printed by running \code{python3 b8\_sim.py},
 and §1 says which parts are solid. §8 contains a result that changes the rig: \textbf{the
 charge specified in the rig note does not reach the eutectic}, so it has no thermostat.
+§\ref{sec:spread} describes the time-dependent model behind the interactive simulator
+(\code{b8\_model.py}), in which ice melts and salt dissolves at finite rates and the drink's heat
+spreads through the bath no faster than the brine carries it: \textbf{that spreading alone
+lengthens the time to 5\,°C from 169 to 202\,s.}
 
 % ---------------------------------------------------------------- 1
 \section{Status of the work}
@@ -95,10 +99,14 @@ rate and the error made by inverting it with $L_f$ instead of $L_{\text{eff}}$.
 taken from the SINTEF time constant rather than measured on this rig — every \RATE\ number
 scales with it. The heat capacities and dissolution enthalpy are textbook placeholders; §11.4
 shows the \FLOOR\ results move by at most 0.3\,K when they are varied over a plausible range.
+The convection factor that sets how fast the drink's heat spreads through the bath
+(§\ref{sec:spread}) is an estimate; over 5–100 it moves the time to 5\,°C from 242 to 180\,s.
 
-\textbf{Not attempted.} Stratification of the bath; the metastable eutectic and hydrohalite
-nucleation; freezing or supercooling of the drink; flow inside the drink (the COMSOL model
-covers that); and any dissolution law that could explain the bench stall at $-7.5\dC$ (§9).
+\textbf{Not attempted.} Stratification of the bath (§\ref{sec:spread} resolves it around the
+can, not in height); the metastable eutectic and hydrohalite nucleation; freezing or
+supercooling of the drink in \code{b8\_sim.py} (\code{b8\_model.py} has both); flow inside the
+drink (the COMSOL model covers that); and any dissolution law that could explain the bench stall
+at $-7.5\dC$ (§9).
 
 % ---------------------------------------------------------------- 2
 \section{Starting point: what \code{sypt code} did}
@@ -511,7 +519,10 @@ Predicted 0.62\,K\,h$^{-1}$ for 0.46\,W\,K$^{-1}$ with the stirrer off; the stir
 \paragraph{E3 · Drink runs} Can~2 from room temperature in the buffered and unbuffered charges.
 DV: $T_d(t)$, $T_b(t)$. Fit both Newton and the $\Delta T^{1/4}$ law to each run, compare
 residuals, and report $U$ rather than $\tau$. Feed the measured $T_b(t)$ of the unbuffered run
-into \eqref{eq:drink} as a check of the bath model independent of the drink model.
+into \eqref{eq:drink} as a check of the bath model independent of the drink model. Log the
+brine with two probes, one within 5\,mm of the can and one at least 5\,cm away: fitted against
+the first, $U$ is the can's alone; the difference between them measures the convection factor
+(§\ref{sec:spread}), predicted to peak near 6\,K.
 
 \paragraph{E4 · Stall test} 150\,g ice + 60\,g water + 38\,g salt at once, unstirred, probes at
 the floor and mid-depth. Then repeat staged. DV: floor minus bulk temperature; time for the stall
@@ -532,6 +543,9 @@ wall-versus-bulk probe of the source ledger exists because it may not hold at th
 and §9 argues it fails badly on the floor of an unstirred bath. With the stirrer on and probes
 at least a few centimetres from the can, a single $T_b$ is the right first model. Where it is
 not, \eqref{eq:drink} should be driven by the measured wall temperature (COMSOL M2).
+§\ref{sec:spread} lifts the approximation around the can: with the brine conducting and
+convecting at a finite rate, the brine by the can runs about 6\,K above the bulk and the time to
+5\,°C rises from 169 to 202\,s.
 
 \subsection{The drink as a lump}
 The drink's own Biot number is 8–17 (equation bank), so it is not a lump by conduction;
@@ -571,9 +585,167 @@ the flux agree to $10^{-3}$\,kJ in 65.44\,kJ.
 \subsection{What $U_0$ does}
 $U_0$ is the least certain number in the model. Time to target scales as $1/U_0$; the
 \FLOOR\ results do not depend on it at all. The SINTEF benchmark it came from cannot also be
-used to validate it.
+used to validate it. A $U$ fitted against a probe out in the bath includes the spreading of
+heat through the bath (§\ref{sec:spread}); against a probe at the can wall it does not.
 
 % ---------------------------------------------------------------- 12
+\section{The time-dependent bath, and how the drink's heat spreads}
+\label{sec:spread}
+
+The model of §4 gives the bath one temperature, the one its enthalpy implies at equilibrium,
+everywhere at once. The simulator (\code{b8\_model.py}, used by \code{b8\_simple.py},
+\code{b8\_app.py} and the web page) keeps the enthalpy bookkeeping but lets each process run at
+its own rate, and lets the drink's heat spread through the bath no faster than the brine can
+carry it. Its numbers are for the buffered charge of §8 on the rig of 20~October, with every
+input in \code{inputs.toml}, and are printed by \code{python3 b8\_simple.py}.
+
+\subsection{Finite rates}
+Ice is a heap of cubes of side $a = 2$\,cm (40\,\% gaps), melting only where brine wets it:
+heat reaches the ice surface from the brine, $h_{bi}A_i(T_b - T_s)$ with $h_{bi} = 100$\,W\,m$^{-2}$K$^{-1}$,
+and from the ice's own interior by conduction. The surface sits at the liquidus temperature of
+the brine (\code{"bulk"}) or of the meltwater-diluted brine at the surface (\code{"salt-limited"},
+the three-equation interface of Holland \& Jenkins). Salt grains dissolve at
+$k_d A_s \rho_b\,(w_{\text{sat}}(T) - w)$ towards halite saturation, and stop at $w_E$ while ice
+remains. The drink can freeze, gradually, as its sugar concentrates; the can is two films in
+series, $1/U = 1/h_i + 1/h_o$ with $h_i \propto \Delta T^{1/4}$, or a measured $U$. The foam and the
+glass hold heat, and the air films on the box are counted. $c_b(w)$, $\rho_b(w)$ and the brine
+conductivity $k_b(w) = 0.5725 - 0.149\,w$\,W\,m$^{-1}$K$^{-1}$ are fits to Melinder (2010), and
+$c_i(T)$ follows IAPWS R10-06. Energy is conserved to $10^{-9}$\,J of the 40.1\,kJ let in over
+a 50-minute run, and every run prints the check. With the bath perfectly mixed this model gives
+169\,s to 5\,°C, the same as the table of §8.
+
+\subsection{Why the heat cannot reach the whole bath at once}
+When Can~2 goes in, 257\,W leaves it in the first second ($T_d = 27.8\dC$ against brine at
+$-20.4\dC$). A perfectly mixed bath shares that at once among 2.55\,kg of ice and 3.97\,kg of brine.
+Still brine is a poor conductor: at the eutectic $k_b = 0.54$\,W\,m$^{-1}$K$^{-1}$ and the heat
+diffusivity is $\alpha_b = k_b/\rho_b c_b = 0.14$\,mm$^2$\,s$^{-1}$, so in the 3 minutes the drink
+takes to cool, conduction carries heat only $\sqrt{\alpha_b t} \approx 5$\,mm from the can. The
+brine there warms, its ice melts first, and the drink then faces warmer brine than the bulk.
+
+Melting ice also limits how far the heat gets. Brine at $T$ above the ice surface loses heat
+to the ice at $h_{bi} a_i (T - T_s)$ per unit volume, where $a_i = 138$\,m$^{-1}$ is the wetted ice
+area per unit volume of bath at drink-in. Against conduction at $k_{\text{eff}}$ this gives a
+penetration length
+\begin{equation}
+\ell = \sqrt{\frac{k_{\text{eff}}}{h_{bi}\,a_i}} = 0.6\ \text{cm (still brine)},\quad
+2.8\ \text{cm} \ (k_{\text{eff}} = 20\,k_b),
+\label{eq:pen}
+\end{equation}
+so most of the drink's heat is absorbed within a few centimetres of the can.
+
+\subsection{Rings around the can}
+The bath is split into $N$ rings (\code{[heat\_spreading] rings}, default 8) from the can wall,
+$r_c = 3.30$\,cm, out to a circle with the floor area of the tank, $R = \sqrt{A_{\text{floor}}/\pi}
+= 11.45$\,cm. The ring edges are spaced evenly in $\ln r$,
+\begin{equation}
+r_j = r_c\,(R/r_c)^{j/N},\qquad j = 0,\dots,N,
+\label{eq:rings}
+\end{equation}
+so the rings are thin by the can (0.56\,cm for $N=8$) and wide at the walls (1.65\,cm). Ring $j$
+holds the share $\phi_j = (r_{j+1}^2 - r_j^2)/(R^2 - r_c^2)$ of the brine, the ice and the salt
+crystals, and has its own brine temperature $T_j$, ice and ice-interior temperature, and crystals.
+The salt fraction $w$ is the same in every ring: the brine that carries the heat also mixes the
+salt, so each step the meltwater is shared out again and carries its heat with it. The drink
+heats only the inner ring; the glass, the lid and the stirrer heat only the outer one:
+\begin{align}
+C_j\,\dot T_j &= G\,(T_{j-1} - T_j) + G\,(T_{j+1} - T_j) - Q_{i,j} - \Delta h_s\,\dot s_j
+  + \delta_{j0}\,UA\,(T_d - T_0) + \delta_{j,N-1}\,(Q_{\text{glass}} + Q_{\text{lid}} + P_{\text{stir}}),
+  \label{eq:ring}\\
+G &= \frac{2\pi\,k_{\text{eff}}\,h}{\ln(r_{j+1}/r_j)} = \frac{2\pi N k_{\text{eff}}\,h}{\ln(R/r_c)},
+  \qquad k_{\text{eff}} = f\,k_b(w),
+  \label{eq:G}
+\end{align}
+with $h$ the depth of brine, $Q_{i,j}$ the heat into ring $j$'s ice and $\dot s_j$ its salt
+dissolving. $G$ is the conductance of a cylindrical shell from the middle of one ring (in $\ln r$)
+to the middle of the next; with the log spacing it is the same for every pair. At drink-in
+($h = 14.5$\,cm, $w = 0.232$, $f = 20$) $G = 63$\,W\,K$^{-1}$, and the whole bath from can to walls
+adds $\ln(R/r_c)/(2\pi k_{\text{eff}} h) = 0.13$\,K\,W$^{-1}$ in series with the can's own
+$1/UA = 0.19$\,K\,W$^{-1}$, although most of the heat is absorbed well before the walls
+\eqref{eq:pen}. The conduction step is backward Euler, a tridiagonal solve, so it is stable for
+any $G$ and conserves energy exactly; everything else is stepped explicitly at $\Delta t = 0.5$\,s.
+With $f = \infty$ all rings take one temperature, which reproduces the first version of the
+simulation (\code{inputs\_original.toml}) to $10^{-13}$\,K.
+
+\paragraph{The convection factor} Still brine ($f = 1$) is only a lower bound. The bath is a
+porous bed of ice through which the brine moves by natural convection: brine cooled by the ice
+sinks, brine warmed by the can rises. Two things raise $k_{\text{eff}}$ above $k_b$. The bed of
+ice and brine conducts 0.98–1.54\,W\,m$^{-1}$K$^{-1}$ (series and parallel bounds), 2–3 times
+$k_b$. And the Kozeny–Carman permeability of the bed, $K = a^2\varepsilon^3/180(1-\varepsilon)^2 =
+4\times10^{-7}$\,m$^2$, gives a Darcy–Rayleigh number $\mathrm{Ra}_D = g\beta\Delta T K h/\nu\alpha_m
+\approx 10^2$–$10^3$ for $\Delta T = 1$–6\,K, and a mean Nusselt number for a heated vertical wall
+in a porous bed of $0.89\,\mathrm{Ra}_D^{1/2} \approx 9$–27 (Cheng \& Minkowycz). Together
+$f \approx 20$–60. The estimate is rough: the gaps (about 1\,cm) are not small next to the 2\,mm
+boundary layer on the can, and brine rising up the can spreads along the top of the bath, not
+through its depth. \code{convection\_factor = 20} takes the low end; between 20 and 60 the time
+to 5\,°C moves only from 202 to 185\,s, because the can's own films then dominate, but below 10 it
+rises quickly. That is why it is an input. $f = \infty$ is the perfectly mixed bath of §4.
+The brine-side film $h_o = 270$\,W\,m$^{-2}$K$^{-1}$ is kept: free convection of brine on a 12\,cm vertical can (Churchill \& Chu, laminar) gives 230–380\,W\,m$^{-2}$K$^{-1}$
+for a 5–25\,K difference, a film 1.5–2.2\,mm thick, inside the 5.6\,mm inner ring.
+
+\subsection{Results}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figs/f9_spreading.pdf}
+\caption{Heat spreading through the bath. (a) The drink for convection factors from perfectly
+mixed to still brine, run with 50 rings. (b) Brine temperature in each of the 8 rings, and
+(c) the share of each ring's ice still there, at times after the drink goes in; the default
+inputs. \code{python3 b8\_simple.py -{}-report-figure} redraws it.}
+\label{fig:spread}
+\end{figure}
+
+With the defaults the drink reaches 5\,°C in \textbf{202\,s instead of 169\,s}. The inner ring
+warms 6\,K above the rest within a minute and peaks at $-14.1\dC$, while the bulk barely moves
+($-20.42$ to $-20.40\dC$); the ice next to the can goes first (Fig.~\ref{fig:spread}c: a quarter
+of it in 10 minutes, against 4\,\% at the walls). Even before the drink, the bath is not uniform:
+the glass warms the outer ring, so the brine there is 0.3\,K warmer than in a perfectly mixed bath.
+
+\begin{center}\small
+\begin{tabular}{@{}l c c c c@{}}
+\toprule
+$f$ & \multicolumn{2}{c}{time to 5\,°C} & brine by the can, peak & bath at drink-in \\
+ & 8 rings & 50 rings & 8 rings & 8 rings \\ \midrule
+$\infty$ (perfectly mixed) & 169\,s & 169\,s & $-19.6\dC$ & $-20.71\dC$ \\
+100 (stirred) & 180\,s & 181\,s & $-17.9\dC$ & $-20.64\dC$ \\
+\textbf{20 (default)} & \textbf{202\,s} & \textbf{209\,s} & $\mathbf{-14.1\dC}$ & $\mathbf{-20.42\dC}$ \\
+5 & 242\,s & 266\,s & $-9.4\dC$ & $-19.97\dC$ \\
+1 (still brine) & 318\,s & 424\,s & $-3.5\dC$ & $-19.39\dC$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Rings.} The rings need to resolve $\ell$ \eqref{eq:pen}. At the default, 4, 8, 16, 32 and
+50 rings give 196, 202, 206, 208 and 209\,s, so 8 are within 3\,\%. In still brine $\ell$ is
+0.6\,cm and shrinks as the ice by the can melts away, so 8 rings (318\,s) are far from the 50-ring
+424\,s; use 50 for $f$ below about 5.
+
+\textbf{What it changes.} Over plausible ranges the inputs that move the time to 5\,°C most are
+$h_o$ ($\div 3$ to $\times 3$: 407 to 133\,s), a measured $U$ (120–200\,W\,m$^{-2}$K$^{-1}$: 265 to 171\,s),
+the drink's mass or heat capacity ($\pm 20$\,\%: 245 to 161\,s) and now $f$ (5–100: 242 to 180\,s).
+The \FLOOR\ numbers hardly move. A fit of $U$ from a drink run (E3) now depends on where the
+brine probe is: \textbf{within about 5\,mm of the can it measures the can alone}; out in the bath
+it measures the can and the spreading together, and should be used with $f = \infty$. Two brine
+probes, one at the can and one at least 5\,cm away, measure $f$: the default predicts a peak
+difference of about 6\,K, still brine 16\,K, a stirred bath 3\,K.
+
+\textbf{Still left out.} Each ring has one temperature from floor to surface, so the vertical
+stratification of §9 is not in it. Convection is a fixed multiple of $k_b$, not a flow driven by
+the temperatures it carries. And the rectangular tank is taken as a cylinder of the same floor
+area.
+
+\subsection{Inputs and the simulator}
+Every number the simulator uses is in \code{inputs.toml}, with its unit and a tag saying where it
+comes from (measured, to measure, assumed, literature, choice, model switch); a short file with
+only the lines that change overrides it. \code{b8\_app.py} puts the main inputs on sliders with a
+live drawing of the tank, the brine drawn ring by ring so the warm layer by the can shows. Every
+slider has a box beside it: a number typed there and confirmed with Enter is used exactly, even
+outside the slider's range, which then widens to follow it. The convection factor has a slider
+of its own, and \code{inf} typed in its box gives the perfectly mixed bath. The web page
+(\url{https://darkpyxlz.github.io/sypt/}) runs the same Python files unchanged in the browser
+(Pyodide), with the same sliders and boxes, every input of \code{inputs.toml} editable, and
+scenarios saved as \code{.toml} files or links. A run takes about 0.5\,s in Python and 1\,s in the
+browser.
+
+% ---------------------------------------------------------------- 13
 \section{Literature}
 
 Marked \secsrc where only a secondary or abstract-level source has been read.
@@ -592,7 +764,19 @@ mechanism only; both lie an order of magnitude below the bath's salinity. Sigma-
 solubility table — the source of the fit in \code{sypt code}. Purdue thermochemical table —
 $\Delta h_s$ \secsrc.
 
-% ---------------------------------------------------------------- 13
+\emph{For §\ref{sec:spread}.} Melinder, Å., \emph{Properties of Secondary Working Fluids for
+Indirect Systems}, 2nd ed., IIR (2010) — $c_b$, $\rho_b$ and $k_b$ of NaCl brine, fitted from
+its tabulation as implemented in CoolProp (INCOMP::MNA) \secsrc. IAPWS R10-06 (2009), Revised
+Release on the Equation of State 2006 for H$_2$O Ice Ih — $c_i(T)$. Holland, D.\,M. \& Jenkins, A.,
+\emph{J. Phys. Oceanogr.} \textbf{29}, 1787–1800 (1999) — the three-equation ice/brine interface
+behind the \code{salt-limited} option \secsrc. Churchill, S.\,W. \& Chu, H.\,H.\,S.,
+\emph{Int. J. Heat Mass Transfer} \textbf{18}, 1323–1329 (1975) — free convection on a vertical
+wall, for $h_o$. Cheng, P. \& Minkowycz, W.\,J., \emph{J. Geophys. Res.} \textbf{82}, 2040–2044
+(1977) — free convection from a vertical wall in a porous medium \secsrc. Carman, P.\,C.,
+\emph{Trans. Inst. Chem. Eng.} \textbf{15}, 150–166 (1937) — the Kozeny–Carman permeability
+\secsrc. Pyodide (\url{https://pyodide.org}) — Python in the browser, for the web simulator.
+
+% ---------------------------------------------------------------- 14
 \section{Notes for whoever picks this up}
 
 \textbf{Do first.} E1. It costs one afternoon and decides between $-17.8$ and $-21.2\dC$ for
@@ -607,7 +791,8 @@ the buffered bath holds $-21.2\dC$ for about 2.5\,h on the leak alone; a stalled
 is colder at the floor than in the bulk.
 
 \textbf{Software.} Python 3 with NumPy and SciPy; Matplotlib for the figures. Everything runs
-in about 12\,s.
+in about 12\,s. The simulator (\code{b8\_model.py}) needs only Python 3.11 or later, plus
+Matplotlib for its pictures; one run takes about 0.5\,s.
 
 % ---------------------------------------------------------------- A
 \appendix
@@ -616,6 +801,10 @@ in about 12\,s.
 \begin{lstlisting}[numbers=none, frame=none, backgroundcolor=\color{teall}, language=bash]
 python3 b8_sim.py           # checks, then figs/*.pdf and numbers.json
 python3 b8_sim.py --quick   # checks only
+python3 b8_simple.py        # the simulator (section 12), one run: table, summary, picture
+python3 b8_app.py           # the simulator behind sliders, each with a box to type into
+python3 b8_simple.py --report-figure   # redraws figs/f9_spreading.pdf
+python3 test_b8.py          # the simulator's checks
 \end{lstlisting}
 
 \begin{lstlisting}[numbers=none, frame=none, backgroundcolor=\color{teall}]

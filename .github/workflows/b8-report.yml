@@ -1,0 +1,82 @@
+name: B8 report
+
+# Builds b8-cold-drink/B8-salted-ice-bath.pdf from its .tex with XeLaTeX on
+# GitHub's runner and commits the PDF back to the branch, so nobody needs TeX
+# installed.  It runs by itself when a push to main changes the report's
+# sources; for another branch, or to rebuild by hand: Actions -> B8 report ->
+# Run workflow.  The check workflow (b8-check.yml) stays free of LaTeX.
+
+on:
+  push:
+    branches: [main]
+    paths: ['b8-cold-drink/B8-salted-ice-bath.tex', 'b8-cold-drink/figs/**', '.github/workflows/b8-report.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write          # to commit the PDF
+  actions: write           # to start the Pages workflow again afterwards
+
+concurrency:
+  group: b8-report-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: b8-cold-drink
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XeLaTeX
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            texlive-xetex texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended fonts-lmodern
+          # the maths font is the only one not in fonts/
+          kpsewhich latinmodern-math.otf || fc-list | grep -i 'latin modern math'
+
+      - name: Build the PDF (twice, so the cross-references resolve)
+        run: |
+          # date the PDF by the last commit, so the same sources give the same file
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" FORCE_SOURCE_DATE=1
+          xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex > /dev/null
+          xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex
+          if grep -E "undefined references|Reference .* undefined|Citation .* undefined" B8-salted-ice-bath.log; then
+            echo "::error::the report has undefined references"; exit 1
+          fi
+
+      - name: Keep the PDF and the log with the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b8-report
+          path: |
+            b8-cold-drink/B8-salted-ice-bath.pdf
+            b8-cold-drink/B8-salted-ice-bath.log
+
+      - name: Commit the PDF if it changed
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add B8-salted-ice-bath.pdf
+          if git diff --cached --quiet; then
+            echo "The PDF is unchanged."
+            exit 0
+          fi
+          git commit -q -m "Rebuild the B8 report PDF from ${GITHUB_SHA::7}"
+          git pull -q --rebase origin "$GITHUB_REF_NAME"
+          git push -q origin "HEAD:$GITHUB_REF_NAME"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      # a push made with the workflow's own token starts no other workflow, so
+      # ask for the Pages copy to be refreshed with the new PDF
+      - name: Publish the new PDF on the site
+        if: steps.commit.outputs.pushed == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run b8-pages.yml --ref main

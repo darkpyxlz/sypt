@@ -16,9 +16,9 @@ editing code.  Two programs use it:
 
 How the bath is modelled
 ------------------------
-The bath is two things, not one:
-  * the BRINE: liquid water, the salt dissolved in it and the salt crystals lying
-    in it, all at one temperature;
+The bath holds two things:
+  * the BRINE: liquid water and the salt dissolved in it (plus the salt crystals
+    lying on the floor);
   * the ICE: the crushed pieces, with their own mass and inside temperature.
 Salt dissolves only where brine touches the crystals, at a rate set by how far
 the brine is below saturation.  Ice melts only where brine touches it.  The ice
@@ -27,12 +27,24 @@ surface: from the warmer brine on one side and from the ice's own interior on
 the other.  So when the drink goes in, the brine warms first and the ice catches
 up over time; nothing melts instantly.
 
+The drink's heat does not reach the whole bath at once.  Around the can the
+bath is split into [heat_spreading] rings rings, from the can out to the tank
+walls (the tank taken as a cylinder of the same floor area).  Each ring has its
+own brine temperature, its own ice and its own salt crystals.  The drink heats
+only the innermost ring, so the ice next to the can melts first and the brine
+there warms above the rest; the glass, the lid and the stirrer touch only the
+outermost ring.  Heat moves from ring to ring by conduction through the brine,
+sped up by convection: effective conductivity = brine conductivity x
+convection_factor (1 = still brine, inf = a perfectly mixed bath).  All rings
+share one salt content (salt mixes through the bath).
+
 Heat paths, in W, each positive in the direction of the arrow:
     room    -> foam          the foam stores heat too, so a warm box keeps
     foam    -> tank glass    giving some up after the bath goes in (walls, base)
     foam    -> brine         through the air under the lid
     glass   -> brine         through the wetted glass
-    drink   -> brine         through the can
+    drink   -> inner ring    through the can
+    ring    -> next ring     conduction and convection through the bath, out to the walls
     stirrer -> brine
     brine   -> ice surface   melts ice
     ice     -> ice surface   conduction inside the pieces; melts ice, cools the ice
@@ -217,6 +229,12 @@ def check_inputs(p):
     for section, key in [('ice', 'heap_porosity'), ('drink', 'freezable_water')]:
         if not 0 < getattr(p.sections[section], key) < 1:
             raise ValueError(f"[{section}] {key} must be between 0 and 1")
+    if not (isinstance(p.heat_spreading.rings, int) and 1 <= p.heat_spreading.rings <= 50):
+        raise ValueError("[heat_spreading] rings must be a whole number from 1 to 50")
+    if math.pi * (p.can.diameter / 2) ** 2 > 0.5 * p.tank.width * p.tank.length:
+        raise ValueError("the can is too big for the tank")
+    if p.heat_spreading.convection_factor <= 0:
+        raise ValueError("[heat_spreading] convection_factor must be above 0 (inf = perfectly mixed)")
 
 
 def solve(f, lo, hi, tol=1e-12):
@@ -258,19 +276,28 @@ class FoamPath:
 # =============================================================================
 @dataclass
 class State:
-    """The quantities stepped forward in time.  Everything else follows from these."""
+    """The quantities stepped forward in time.  Everything else follows from these.
+    Lists hold one value per ring, from the can outwards."""
     t: float            # s, since the bath was made up
     H_drink: float      # J, heat content of drink + can (zero = liquid drink at 0 C)
     nucleated: bool     # has ice started to form in the drink?
-    H_brine: float      # J, heat content of brine + salt crystals (zero = water and solid salt at 0 C)
-    water: float        # kg, liquid water in the brine
-    dissolved: float    # kg, salt dissolved in the brine
-    crystals: float     # kg, salt still solid
-    ice: float          # kg, ice in the bath
-    T_ice: float        # degC, inside the ice pieces
+    water: float        # kg, liquid water in the brine (all rings)
+    dissolved: float    # kg, salt dissolved in the brine (all rings)
+    H_rings: list       # J, sensible heat of each ring's brine and salt crystals (zero = 0 C)
+    crystals_rings: list  # kg, salt still solid in each ring
+    ice_rings: list     # kg, ice in each ring
+    T_ice_rings: list   # degC, inside the ice pieces of each ring
     T_tank: float       # degC, tank glass
     T_foam_walls: float  # degC, middle of the foam walls and base
     T_foam_lid: float    # degC, middle of the foam lid
+
+    @property
+    def ice(self):
+        return sum(self.ice_rings)
+
+    @property
+    def crystals(self):
+        return sum(self.crystals_rings)
 
 
 @dataclass
@@ -281,13 +308,18 @@ class Snapshot:
     drink_in: bool           # is the can in the bath yet?
     T_drink: float           # degC
     drink_frozen: float      # fraction of the drink's water that is ice
-    T_brine: float           # degC
+    T_brine: float           # degC, the outermost ring: the bath away from the can (a probe in the bulk)
+    T_near: float            # degC, the innermost ring: the brine next to the can
+    T_rings: list            # degC, brine in each ring, from the can outwards
     w: float                 # salt mass fraction of the brine
-    T_surface: float         # degC, ice surface
-    T_ice: float             # degC, inside the ice
+    T_surface: float         # degC, ice surface in the outermost ring
+    T_surface_rings: list    # degC, ice surface in each ring
+    T_ice: float             # degC, inside the ice in the outermost ring
     T_tank: float            # degC, tank glass
     T_foam: float            # degC, middle of the foam walls
-    ice: float               # kg
+    ice: float               # kg, all the ice
+    ice_near: float          # kg, the ice in the innermost ring
+    ice_rings: list          # kg, the ice in each ring
     salt_solid: float        # kg
     salt_dissolved: float    # kg
     level: float             # m, liquid surface above the tank floor
@@ -296,16 +328,20 @@ class Snapshot:
     ice_wet: float           # fraction of the ice heap under the liquid
     heap_bottom: float       # m, bottom of the ice heap
     heap_top: float          # m, top of the ice heap
-    dissolving: float        # kg/s of salt going into solution
-    Q_drink: float           # W, drink -> brine
+    dissolving: float        # kg/s of salt going into solution, all rings
+    dissolving_rings: list   # kg/s, each ring
+    Q_drink: float           # W, drink -> innermost ring
+    Q_spread: float          # W, innermost ring -> the next one out
     Q_tank: float            # W, tank glass -> brine
     Q_room_walls: float      # W, room -> foam walls and base
     Q_room_lid: float        # W, room -> foam lid
     Q_walls: float           # W, foam walls and base -> tank glass
     Q_lid: float             # W, foam lid -> brine
     Q_stir: float            # W, stirrer -> brine
-    Q_ice: float             # W, brine -> ice surface
-    Q_core: float            # W, ice interior -> ice surface
+    Q_ice: float             # W, brine -> ice surface, all rings
+    Q_core: float            # W, ice interior -> ice surface, all rings
+    Q_ice_rings: list        # W, the same, each ring
+    Q_core_rings: list       # W
 
 
 @dataclass
@@ -347,6 +383,9 @@ class Result:
             time_to_target=self.time_to_target(),
             brine_at_drink_in=at_in.T_brine,
             brine_peak_after_drink_in=max((s.T_brine for s in after), default=float('nan')),
+            near_peak_after_drink_in=max((s.T_near for s in after), default=float('nan')),
+            near_ice_at_drink_in=at_in.ice_near,
+            near_ice_at_end=last.ice_near,
             coldest_brine=min(self.series('T_brine')),
             drink_at_end=last.T_drink,
             drink_frozen_at_end=last.drink_frozen,
@@ -367,6 +406,8 @@ class Result:
         lines += [
             f"bath when the drink goes in: {s['brine_at_drink_in']:.1f} °C "
             f"(warms to {s['brine_peak_after_drink_in']:.1f} °C)",
+            f"brine next to the can: up to {s['near_peak_after_drink_in']:.1f} °C; ice there "
+            f"{1000 * s['near_ice_at_drink_in']:.0f} g -> {1000 * s['near_ice_at_end']:.0f} g",
             f"coldest bath: {s['coldest_brine']:.1f} °C   (eutectic {p.phase_diagram.eutectic_temperature:g} °C)",
             f"drink at the end: {s['drink_at_end']:.1f} °C" +
             (f", {100 * s['drink_frozen_at_end']:.0f} % of its water frozen" if s['drink_frozen_at_end'] > 0 else ''),
@@ -404,6 +445,14 @@ class Experiment:
         self.can_mass = p.drink.mass + p.can.mass                 # kg, full can
         self.can_ratio = math.pi * (p.can.diameter / 2) ** 2 / self.floor_area
         self.n_ice_pieces = p.ice.mass / (p.materials.ice_density * p.ice.piece_size ** 3)
+        # the rings around the can, from its wall out to the tank taken as a cylinder of
+        # the same floor area.  Their edges are spaced evenly in log(r), so the rings are
+        # thin near the can and every pair of neighbours has the same conductance.
+        n, r_can, r_tank = p.heat_spreading.rings, p.can.diameter / 2, math.sqrt(self.floor_area / math.pi)
+        self.ring_edges = [r_can * (r_tank / r_can) ** (i / n) for i in range(n + 1)]
+        self.ring_shares = [(b * b - a * a) / (r_tank ** 2 - r_can ** 2)
+                            for a, b in zip(self.ring_edges, self.ring_edges[1:])]
+        self.ring_log_step = math.log(r_tank / r_can) / n     # ln(r_next / r) between ring middles
         self.salt_area0 = 6 * p.salt.mass / (p.materials.salt_density * p.salt.grain_size)
         self.w_eutectic = self.bodnar_w(-p.phase_diagram.eutectic_temperature)
         self.c_water = self.brine_cp(0.0)
@@ -419,6 +468,11 @@ class Experiment:
     def brine_density(self, w):
         """Density of brine with salt mass fraction w, kg/m^3."""
         a, b = self.p.materials.brine_density
+        return a + b * w
+
+    def brine_conductivity(self, w):
+        """Thermal conductivity of still brine with salt mass fraction w, W/(m K)."""
+        a, b = self.p.materials.brine_conductivity
         return a + b * w
 
     def ice_enthalpy(self, T):
@@ -612,22 +666,37 @@ class Experiment:
         h_out = h.outside_h * (free_convection if h.outside_power_law else 1.0)
         return 1.0 / (1.0 / h_in + 1.0 / h_out)
 
-    def ice_piece_side(self, ice):
-        """Side of one ice piece now, m.  Pieces shrink as they melt."""
-        return (ice / (self.n_ice_pieces * self.p.materials.ice_density)) ** (1 / 3)
+    def ice_piece_side(self, ice, n=None):
+        """Side of one ice piece now, m, for n pieces holding `ice` kg (default: all the
+        pieces in the bath).  Pieces shrink as they melt."""
+        n = self.n_ice_pieces if n is None else n
+        return (ice / (n * self.p.materials.ice_density)) ** (1 / 3)
 
-    def ice_area(self, ice, wet):
-        """Wetted surface of the crushed ice, m^2: only the part of the heap under the liquid."""
+    def ice_area(self, ice, wet, n=None):
+        """Wetted surface of n crushed-ice pieces holding `ice` kg, m^2: only the part
+        of the heap under the liquid counts."""
         if ice <= 0:
             return 0.0
-        return self.n_ice_pieces * 6 * self.ice_piece_side(ice) ** 2 * wet
+        n = self.n_ice_pieces if n is None else n
+        return n * 6 * self.ice_piece_side(ice, n) ** 2 * wet
 
-    def ice_core_G(self, ice, wet):
+    def ice_core_G(self, ice, wet, n=None):
         """Conductance from the middle of the pieces to their wet surface, W/K.
         For a cube of side a the mean conduction distance is about a/6."""
         if ice <= 0:
             return 0.0
-        return self.p.materials.ice_conductivity * self.ice_area(ice, wet) / (self.ice_piece_side(ice) / 6)
+        return self.p.materials.ice_conductivity * self.ice_area(ice, wet, n) / (self.ice_piece_side(ice, n) / 6)
+
+    def ring_G(self, w, level):
+        """Conductance between neighbouring rings, W/K: conduction through a cylindrical
+        shell of brine from the middle of one ring to the middle of the next,
+            G = 2 pi k_eff H / ln(r_next / r),  k_eff = brine conductivity x convection_factor,
+        with H the depth of the bath.  A still bath has convection_factor 1; inf
+        makes the bath perfectly mixed."""
+        if level <= 0:
+            return 0.0
+        k_eff = self.brine_conductivity(w) * self.p.heat_spreading.convection_factor
+        return 2 * math.pi * k_eff * level / self.ring_log_step
 
     def ice_surface_temperature(self, T_brine, w, T_ice, A_ice, G_core):
         """Temperature of the ice surface, set by [ice] surface_model.
@@ -656,14 +725,14 @@ class Experiment:
             return self.freezing_point(w)
         return self.freezing_point(solve(salt_shortfall, 0.0, w, tol=1e-12))
 
-    def crystal_area(self, crystals):
-        """Surface of the undissolved salt, m^2.  Grains shrink as they dissolve,
-        so the area goes as mass^(2/3)."""
+    def crystal_area(self, crystals, share=1.0):
+        """Surface of the undissolved salt, m^2, in a part of the bath that started with
+        `share` of the salt.  Grains shrink as they dissolve, so the area goes as mass^(2/3)."""
         if crystals <= 0:
             return 0.0
-        return self.salt_area0 * (crystals / self.p.salt.mass) ** (2 / 3)
+        return share * self.salt_area0 * (crystals / (share * self.p.salt.mass)) ** (2 / 3)
 
-    def dissolve_rate(self, T_brine, w, crystals, ice):
+    def dissolve_rate(self, T_brine, w, crystals, ice, share=1.0):
         """kg/s of salt going into solution.  Positive below saturation, negative
         (salt growing back onto the grains) above it, if there are grains to grow on.
         While there is ice, the brine cannot get past the eutectic composition:
@@ -673,23 +742,53 @@ class Experiment:
             return 0.0
         if drive > 0 and ice > 0 and w >= self.w_eutectic:
             return 0.0
-        return self.p.salt.dissolve_coefficient * self.crystal_area(max(crystals, 0.0)) * self.brine_density(w) * drive
+        return (self.p.salt.dissolve_coefficient * self.crystal_area(max(crystals, 0.0), share)
+                * self.brine_density(w) * drive)
 
     # =========================================================================
     # 3f. The brine and the drink: temperature from heat content
     # =========================================================================
-    def brine_heat(self, T, water, dissolved, crystals):
-        """Heat content of the brine plus the salt crystals in it, J, at T."""
-        w = dissolved / (water + dissolved) if water > 0 else 0.0
-        return ((water + dissolved) * self.brine_cp(w) * T
-                + dissolved * self.p.materials.dissolving_heat     # dissolving soaked up heat
-                + crystals * self.p.materials.salt_heat_capacity * T)
+    def ring_heat_capacities(self, water, dissolved, crystals_rings):
+        """(C, w): heat capacity of each ring's brine and salt crystals, J/K, and the salt
+        fraction.  Every ring holds its share of the brine (salt mixes through the bath)."""
+        M = water + dissolved
+        w = dissolved / M if water > 0 else 0.0
+        cp, c_salt = self.brine_cp(w), self.p.materials.salt_heat_capacity
+        return [share * M * cp + crystals * c_salt for share, crystals in zip(self.ring_shares, crystals_rings)], w
 
-    def brine_temperature(self, s):
-        """Invert brine_heat(): a straight line in T, so one division.  Returns (T, w)."""
-        w = s.dissolved / (s.water + s.dissolved) if s.water > 0 else 0.0
-        C = (s.water + s.dissolved) * self.brine_cp(w) + s.crystals * self.p.materials.salt_heat_capacity
-        return (s.H_brine - s.dissolved * self.p.materials.dissolving_heat) / C, w
+    def ring_temperatures(self, s):
+        """(temperature of each ring's brine, w).  The heat contents are sensible heat
+        only, H = C T; the heat taken by dissolving is kept apart (dissolved x dissolving_heat)."""
+        C, w = self.ring_heat_capacities(s.water, s.dissolved, s.crystals_rings)
+        return [H / c for H, c in zip(s.H_rings, C)], w
+
+    def spread(self, H_rings, water, dissolved, crystals_rings, level, dt):
+        """Let heat flow from ring to ring for one step.  Backward Euler,
+            C_i (T_i' - T_i) = G dt (T_{i-1}' - T_i') + G dt (T_{i+1}' - T_i'),
+        solved as a tridiagonal system: stable for any conductance and exact for
+        energy.  With an infinite conductance the rings all take one temperature."""
+        C, w = self.ring_heat_capacities(water, dissolved, crystals_rings)
+        n = len(C)
+        G = self.ring_G(w, level)
+        if n == 1 or G == 0:
+            return H_rings
+        if math.isinf(G):
+            T = sum(H_rings) / sum(C)
+            return [c * T for c in C]
+        g = G * dt
+        lower = [-g] * n                         # coefficient of T_{i-1}'
+        upper = [-g] * n                         # coefficient of T_{i+1}'
+        diagonal = [c + g * ((i > 0) + (i < n - 1)) for i, c in enumerate(C)]
+        rhs = list(H_rings)                      # C_i T_i
+        for i in range(1, n):                    # Thomas algorithm: eliminate below the diagonal
+            factor = lower[i] / diagonal[i - 1]
+            diagonal[i] -= factor * upper[i - 1]
+            rhs[i] -= factor * rhs[i - 1]
+        T = [0.0] * n
+        T[-1] = rhs[-1] / diagonal[-1]
+        for i in range(n - 2, -1, -1):
+            T[i] = (rhs[i] - upper[i] * T[i + 1]) / diagonal[i]
+        return [c * t for c, t in zip(C, T)]
 
     def drink_temperature(self, H, nucleated):
         """Drink temperature and the fraction of its water that has frozen.
@@ -715,27 +814,52 @@ class Experiment:
     def describe(self, s):
         """Work out everything that follows from the state s."""
         p = self.p
-        T_b, w = self.brine_temperature(s)
+        T_rings, w = self.ring_temperatures(s)
+        T_near, T_b = T_rings[0], T_rings[-1]
         drink_in = s.t >= p.drink.goes_in_at
         level, submerged, can_base, wet, bottom, top = self.liquid_level(s, w, drink_in)
         (Q_room_walls, Q_walls, Q_room_lid, Q_lid), T_foam = self.foam_flows(s, T_b)
         T_drink, frozen = self.drink_temperature(s.H_drink, s.nucleated)
-        A_ice, G_core = self.ice_area(s.ice, wet), self.ice_core_G(s.ice, wet)
-        T_surface = self.ice_surface_temperature(T_b, w, s.T_ice, A_ice, G_core)
-        dT_can = T_drink - T_b
+        h, ice_total, dt = p.ice.brine_to_ice_h, s.ice, p.simulation.time_step
+        freezing = self.freezing_point(w)               # the same in every ring, unless salt-limited
+        T_surface_rings, Q_ice_rings, Q_core_rings, dissolving_rings = [], [], [], []
+        for T, ice, T_ice, crystals, share in zip(T_rings, s.ice_rings, s.T_ice_rings,
+                                                   s.crystals_rings, self.ring_shares):
+            n = self.n_ice_pieces * share
+            # Small pieces even out inside faster than one time step; then the interior
+            # can give up at most what brings it to the surface temperature in a step.
+            C_ice = ice * p.materials.ice_heat_capacity
+            A, G = self.ice_area(ice, wet, n), min(self.ice_core_G(ice, wet, n), C_ice / dt)
+            T_s = freezing if p.ice.surface_model == 'bulk' else self.ice_surface_temperature(T, w, T_ice, A, G)
+            T_surface_rings.append(T_s)
+            Q_ice_rings.append(h * A * (T - T_s))
+            Q_core_rings.append(G * (T_ice - T_s))
+            dissolving_rings.append(self.dissolve_rate(T, w, crystals, ice_total, share))
+        dT_can = T_drink - T_near
+        Q_drink = self.can_U(dT_can) * self.can_area(submerged) * dT_can if drink_in else 0.0
+        G_ring = self.ring_G(w, level)
+        if len(T_rings) == 1:
+            Q_spread = 0.0
+        elif math.isfinite(G_ring):
+            Q_spread = G_ring * (T_rings[0] - T_rings[1])
+        else:                                   # perfectly mixed: the ring passes on what it gets
+            Q_spread = Q_drink - Q_ice_rings[0]
         return Snapshot(
             t=s.t, state=s, drink_in=drink_in, T_drink=T_drink, drink_frozen=frozen,
-            T_brine=T_b, w=w, T_surface=T_surface, T_ice=s.T_ice, T_tank=s.T_tank, T_foam=T_foam,
-            ice=s.ice, salt_solid=s.crystals, salt_dissolved=s.dissolved,
+            T_brine=T_b, T_near=T_near, T_rings=T_rings, w=w,
+            T_surface=T_surface_rings[-1], T_surface_rings=T_surface_rings,
+            T_ice=s.T_ice_rings[-1], T_tank=s.T_tank, T_foam=T_foam,
+            ice=ice_total, ice_near=s.ice_rings[0], ice_rings=list(s.ice_rings),
+            salt_solid=s.crystals, salt_dissolved=s.dissolved,
             level=level, submerged=submerged, can_base=can_base, ice_wet=wet,
             heap_bottom=bottom, heap_top=top,
-            dissolving=self.dissolve_rate(T_b, w, s.crystals, s.ice),
-            Q_drink=self.can_U(dT_can) * self.can_area(submerged) * dT_can if drink_in else 0.0,
+            dissolving=sum(dissolving_rings), dissolving_rings=dissolving_rings,
+            Q_drink=Q_drink, Q_spread=Q_spread,
             Q_tank=self.glass_U * self.wetted_glass_area(level) * (s.T_tank - T_b),
             Q_room_walls=Q_room_walls, Q_room_lid=Q_room_lid, Q_walls=Q_walls, Q_lid=Q_lid,
             Q_stir=p.stirrer.power,
-            Q_ice=p.ice.brine_to_ice_h * A_ice * (T_b - T_surface),
-            Q_core=G_core * (s.T_ice - T_surface),
+            Q_ice=sum(Q_ice_rings), Q_core=sum(Q_core_rings),
+            Q_ice_rings=Q_ice_rings, Q_core_rings=Q_core_rings,
         )
 
     def step(self, s, f, dt):
@@ -750,66 +874,110 @@ class Experiment:
         if self.box['lid'].C > 0:
             T_foam_lid += (f.Q_room_lid - f.Q_lid) * dt / self.box['lid'].C
 
-        # 2. Salt dissolves (or grows back).  The brine's heat content is unchanged:
-        #    brine_temperature() turns the dissolving into a cooling.
-        d = max(min(f.dissolving * dt, s.crystals), -s.dissolved)
-        dissolved, crystals = s.dissolved + d, s.crystals - d
+        # 2. Salt dissolves (or grows back) ring by ring.  The heat it takes comes out
+        #    of that ring's brine; the total is kept as dissolved x dissolving_heat.
+        dh = self.p.materials.dissolving_heat
+        dissolving = [max(min(rate * dt, crystals), -share * s.dissolved)
+                      for rate, crystals, share in zip(f.dissolving_rings, s.crystals_rings, self.ring_shares)]
+        crystals_rings = [c - d for c, d in zip(s.crystals_rings, dissolving)]
+        dissolved = s.dissolved + sum(dissolving)
 
-        # 3. Ice surface: heat arriving from both sides melts ice there (negative: freezes on).
-        h_solid = self.ice_enthalpy(s.T_ice)               # J/kg of ice leaving the ice
-        h_melt = self.brine_cp(f.w) * f.T_surface          # J/kg of water joining the brine
-        melt = (f.Q_ice + f.Q_core) * dt / (h_melt - h_solid)
-        melt = min(melt, s.ice)                            # cannot melt more than there is
-        melt = max(melt, -0.5 * s.water)                   # cannot freeze out all the water
+        # 3. Ice surfaces, ring by ring: heat arriving from both sides melts ice there
+        #    (negative: freezes on).  The ice loses the heat conducted to its surface
+        #    and the mass that melted.
+        cp = self.brine_cp(f.w)
+        last = len(self.ring_shares) - 1
+        H_rings, ice_rings, T_ice_rings, melts = [], [], [], []
+        for i, share in enumerate(self.ring_shares):
+            ice, T_ice, T_surface = s.ice_rings[i], s.T_ice_rings[i], f.T_surface_rings[i]
+            Q_ice, Q_core = f.Q_ice_rings[i], f.Q_core_rings[i]
+            h_solid = self.ice_enthalpy(T_ice)               # J/kg of ice leaving the ice
+            h_melt = cp * T_surface                          # J/kg of water joining the brine
+            melt = (Q_ice + Q_core) * dt / (h_melt - h_solid)
+            if melt >= ice:                                  # the last of it melts: the brine pays
+                melt, to_ice, H_ice = ice, ice * (h_melt - h_solid), 0.0   # exactly what that costs
+            else:
+                melt = max(melt, -0.5 * share * s.water)     # cannot freeze out all the water
+                to_ice = melt * (h_melt - h_solid) - Q_core * dt           # = Q_ice dt unless capped
+                H_ice = (ice - melt) * h_solid - Q_core * dt
+            ice -= melt
+            ice_rings.append(ice)
+            T_ice_rings.append(self.ice_temperature(H_ice / ice) if ice > 1e-12 else T_surface)
+            melts.append(melt)
 
-        # 4. Ice: loses the heat conducted to its surface, and the mass that melted.
-        H_ice = s.ice * h_solid - f.Q_core * dt - melt * h_solid
-        ice = s.ice - melt
-        T_ice = self.ice_temperature(H_ice / ice) if ice > 1e-9 else f.T_surface
+            # 4. Brine: the innermost ring gains the drink's heat; the outermost gains glass,
+            #    lid and stirrer heat.  Each loses heat to its own ice and to dissolving,
+            #    and gains its own meltwater.
+            gains = (f.Q_drink if i == 0 else 0.0) + (f.Q_tank + f.Q_lid + f.Q_stir if i == last else 0.0)
+            H_rings.append(s.H_rings[i] + gains * dt - to_ice + melt * h_melt - dissolving[i] * dh)
+        water = s.water + sum(melts)
 
-        # 5. Brine: gains drink, glass, lid and stirrer heat, loses heat to the ice surface,
-        #    gains the meltwater.
-        H_brine = (s.H_brine + (f.Q_drink + f.Q_tank + f.Q_lid + f.Q_stir - f.Q_ice) * dt
-                   + melt * h_melt)
-        water = s.water + melt
+        # 5. Keep every ring's share of the brine (salt mixes, so all rings hold brine of
+        #    the same salt fraction): rings with too much pass brine, with its heat, to
+        #    rings with too little.
+        M_old, M_new = s.water + s.dissolved, water + dissolved
+        extra = [s_ * M_old + m + d - s_ * M_new for s_, m, d in zip(self.ring_shares, melts, dissolving)]
+        given = sum(e for e in extra if e > 0)
+        if given > 0:
+            heat = sum(e * cp * T for e, T in zip(extra, f.T_rings) if e > 0)
+            H_rings = [H - e * cp * T if e > 0 else H - e * heat / given
+                       for H, e, T in zip(H_rings, extra, f.T_rings)]
 
-        # 6. Ice appears in the drink once it is cold enough.
+        # 6. Heat spreads from ring to ring.
+        H_rings = self.spread(H_rings, water, dissolved, crystals_rings, f.level, dt)
+
+        # 7. Ice appears in the drink once it is cold enough.
         d_ = self.p.drink
         nucleated = s.nucleated or (d_.freezes and H_drink / self.drink_C
                                     <= d_.freezing_point - d_.supercooling)
 
-        return State(s.t + dt, H_drink, nucleated, H_brine, water, dissolved, crystals,
-                     ice, T_ice, T_tank, T_foam_walls, T_foam_lid)
+        return State(s.t + dt, H_drink, nucleated, water, dissolved, H_rings, crystals_rings,
+                     ice_rings, T_ice_rings, T_tank, T_foam_walls, T_foam_lid)
 
     def initial_state(self):
         """The bath as it goes in: ice, water and salt at their own starting temperatures,
-        all the salt still solid, the tank at its starting temperature.  Nothing is at
-        equilibrium yet: the bath cools itself as the salt dissolves and the ice melts."""
+        all the salt still solid, the tank at its starting temperature.  The bath is
+        mixed as it is made up, so every ring starts at one temperature with an even
+        share of the ice and the salt.  Nothing is at equilibrium yet: the bath cools
+        itself as the salt dissolves and the ice melts."""
         p = self.p
-        H_brine = (p.water.mass * self.c_water * p.water.start_temperature
-                   + p.salt.mass * p.materials.salt_heat_capacity * p.salt.start_temperature)
-        return State(0.0, self.drink_C * p.drink.start_temperature, False, H_brine,
-                     p.water.mass, 0.0, p.salt.mass, p.ice.mass, p.ice.start_temperature,
+        crystals = [share * p.salt.mass for share in self.ring_shares]
+        C, _ = self.ring_heat_capacities(p.water.mass, 0.0, crystals)
+        T0 = ((p.water.mass * self.c_water * p.water.start_temperature
+               + p.salt.mass * p.materials.salt_heat_capacity * p.salt.start_temperature) / sum(C))
+        n = len(self.ring_shares)
+        return State(0.0, self.drink_C * p.drink.start_temperature, False, p.water.mass, 0.0,
+                     [c * T0 for c in C], crystals, [share * p.ice.mass for share in self.ring_shares],
+                     [p.ice.start_temperature] * n,
                      p.tank.start_temperature, p.box.start_temperature, p.box.start_temperature)
 
     def total_heat(self, s):
         """Heat content of everything inside the box, J, for the energy check."""
-        return (s.H_brine + s.ice * self.ice_enthalpy(s.T_ice) + self.tank_C * s.T_tank + s.H_drink
+        ice = sum(m * self.ice_enthalpy(T) for m, T in zip(s.ice_rings, s.T_ice_rings))
+        return (sum(s.H_rings) + s.dissolved * self.p.materials.dissolving_heat + ice
+                + self.tank_C * s.T_tank + s.H_drink
                 + self.box['walls'].C * s.T_foam_walls + self.box['lid'].C * s.T_foam_lid)
 
     def time_constants(self, f):
         """The fastest things in the model at snapshot f, s.  The time step must be
-        well below the shortest of these."""
+        well below the shortest of these.  (Spreading between rings is worked out
+        implicitly, so it sets no limit.)"""
         s, p = f.state, self.p
-        A_ice, G = self.ice_area(s.ice, f.ice_wet), self.ice_core_G(s.ice, f.ice_wet)
-        m_brine = s.water + s.dissolved
-        C_brine = m_brine * self.brine_cp(f.w) + s.crystals * p.materials.salt_heat_capacity
-        glass = self.glass_U * self.wetted_glass_area(f.level)
-        rates = {'tank glass': glass / self.tank_C,
-                 'brine': (p.ice.brine_to_ice_h * A_ice + glass) / C_brine if C_brine > 0 else 0,
-                 'ice interior': G / (s.ice * p.materials.ice_heat_capacity) if s.ice > 0 else 0,
-                 'salt dissolving': (p.salt.dissolve_coefficient * self.crystal_area(s.crystals)
-                                     * self.brine_density(f.w) / m_brine) if m_brine > 0 else 0}
+        C, w = self.ring_heat_capacities(s.water, s.dissolved, s.crystals_rings)
+        h, glass = p.ice.brine_to_ice_h, self.glass_U * self.wetted_glass_area(f.level)
+        drink = self.can_U(25.0) * self.can_area(1.0)
+        rates = {'tank glass': glass / self.tank_C}
+        for i, (c, share, ice, crystals) in enumerate(zip(C, self.ring_shares, s.ice_rings, s.crystals_rings)):
+            n = self.n_ice_pieces * share
+            name = 'brine next to the can' if i == 0 else 'brine'
+            heat = h * self.ice_area(ice, f.ice_wet, n) + (drink if i == 0 else 0) + (glass if i == len(C) - 1 else 0)
+            rates[name] = max(rates.get(name, 0), heat / c if c > 0 else 0)
+            if ice > 0:
+                rates['ice interior'] = self.ice_core_G(ice, f.ice_wet, n) / (ice * p.materials.ice_heat_capacity)
+            m_brine = share * (s.water + s.dissolved)
+            if m_brine > 0:
+                rates['salt dissolving'] = max(rates.get('salt dissolving', 0), p.salt.dissolve_coefficient
+                                               * self.crystal_area(crystals, share) * self.brine_density(w) / m_brine)
         for name, path in self.box.items():
             if path.C > 0:
                 rates[f'foam {name}'] = (path.G_out + path.G_in) / path.C

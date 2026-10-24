@@ -10,13 +10,14 @@ styrofoam box.  The physics is in b8_model.py; every number is in inputs.toml.
     python3 b8_simple.py --no-show                save b8_simple.png without opening a window
     python3 b8_simple.py --gif                    also save b8_tank.gif, the tank as an animation
     python3 b8_simple.py --list-inputs            what still needs measuring, with the current values
+    python3 b8_simple.py --report-figure          redraw the report's figure on heat spreading
 
 For sliders and a live picture of the tank, run b8_app.py instead.
 """
 
 import argparse
 
-from b8_model import Experiment, describe_inputs, load_inputs
+from b8_model import HERE, Experiment, describe_inputs, load_inputs
 
 
 def print_run(ex, result):
@@ -32,11 +33,11 @@ def print_run(ex, result):
     for w in result.warnings:
         print(f"  WARNING: {w}")
 
-    print(f"{'t (s)':>7} {'drink':>7} {'brine':>7} {'ice':>7} {'surface':>8} {'tank':>7} "
+    print(f"{'t (s)':>7} {'drink':>7} {'by can':>7} {'brine':>7} {'ice':>7} {'surface':>8} {'tank':>7} "
           f"{'ice kg':>7} {'salt g':>7} {'level cm':>9}")
     every = round(p.simulation.print_every / p.simulation.time_step)
     for s in result.history[::every]:
-        print(f"{s.t:7.0f} {s.T_drink:7.2f} {s.T_brine:7.2f} {s.T_ice:7.2f} {s.T_surface:8.2f} "
+        print(f"{s.t:7.0f} {s.T_drink:7.2f} {s.T_near:7.2f} {s.T_brine:7.2f} {s.T_ice:7.2f} {s.T_surface:8.2f} "
               f"{s.T_tank:7.2f} {s.ice:7.3f} {1000 * s.salt_solid:7.0f} {100 * s.level:9.2f}")
 
     summary = result.summary()
@@ -45,6 +46,9 @@ def print_run(ex, result):
           else f"drink never reaches {target:g} C")
     print(f"bath when the drink goes in {summary['brine_at_drink_in']:.2f} C, "
           f"warms to {summary['brine_peak_after_drink_in']:.2f} C in the next 5 min")
+    if len(ex.ring_shares) > 1 and p.heat_spreading.convection_factor < float('inf'):
+        print(f"brine next to the can (\"by can\") up to {summary['near_peak_after_drink_in']:.2f} C; "
+              f"ice there {1000 * summary['near_ice_at_drink_in']:.0f} g -> {1000 * summary['near_ice_at_end']:.0f} g")
     if summary['drink_frozen_at_end'] > 0:
         print(f"drink at the end {summary['drink_at_end']:.2f} C, "
               f"{100 * summary['drink_frozen_at_end']:.0f} % of its water frozen")
@@ -71,10 +75,21 @@ def main():
     parser.add_argument('--no-plot', action='store_true', help='numbers only, no figure at all')
     parser.add_argument('--gif', action='store_true', help='also save b8_tank.gif')
     parser.add_argument('--list-inputs', action='store_true', help='list the inputs still to measure')
+    parser.add_argument('--report-figure', action='store_true',
+                        help="save the report's heat-spreading figure, figs/f9_spreading.pdf, and stop")
     args = parser.parse_args()
 
     if args.list_inputs:
         return list_inputs(load_inputs(args.inputs))
+    if args.report_figure:
+        import matplotlib
+        matplotlib.use('Agg')
+        import b8_plots
+        b8_plots.use_report_fonts()
+        path = HERE / 'figs' / 'f9_spreading.pdf'
+        b8_plots.spreading_figure(load_inputs(args.inputs), path)
+        print(f'saved {path}')
+        return None
     ex = Experiment(load_inputs(args.inputs))
     result = ex.run()
     print_run(ex, result)

@@ -88,7 +88,39 @@ first_leak = base.box.foam_conductivity / base.box.wall_thickness * (
 check("without films the leak is the first version's k A / t", abs(ex0.UA_walls + ex0.UA_lid - first_leak) < 1e-12,
       f"({first_leak:.4f} W/K)")
 
-# --- 4. Phase diagram -----------------------------------------------------------
+# --- 4. Heat spreading through the bath --------------------------------------------
+ex = Experiment(base)
+check('rings cover the bath once', abs(sum(ex.ring_shares) - 1) < 1e-12 and len(ex.ring_shares) == base.heat_spreading.rings)
+still = base.copy()
+still.heat_spreading.convection_factor, still.heat_spreading.rings = 1.0, 16
+r_still = run(still)
+first, last = r_still.history[0].state, r_still.history[-1].state
+check('still bath (rings melt out): energy conserved', abs(r_still.energy_error) < 1e-3,
+      f"({r_still.energy_error:+.1e} J, inner ring ice {1000 * last.ice_rings[0]:.2f} g)")
+check('still bath: water and salt conserved',
+      abs((first.ice + first.water) - (last.ice + last.water)) < 1e-9
+      and abs((first.dissolved + first.crystals) - (last.dissolved + last.crystals)) < 1e-9)
+r_def = results['inputs.toml']
+s3 = r_def.at(base.drink.goes_in_at + 120)
+check('the brine next to the can warms above the bulk', s3.T_near > s3.T_brine + 1,
+      f"(2 min after the drink goes in: {s3.T_near:.1f} C at the can, {s3.T_brine:.1f} C in the bulk)")
+inner = s3.T_rings[:-1]                     # the outermost ring is warmed by the glass
+check('temperatures fall from the can outwards (inner rings)', all(a >= b - 1e-9 for a, b in zip(inner, inner[1:])),
+      ' '.join(f'{t:.1f}' for t in s3.T_rings))
+check('the ice next to the can melts first', r_def.history[-1].ice_rings[0] / r_def.history[0].ice_rings[0]
+      < r_def.history[-1].ice_rings[-1] / r_def.history[0].ice_rings[-1])
+check('a still bath cools the drink more slowly than a mixed one',
+      r_still.time_to_target() > r_def.time_to_target() > run(load_inputs(HERE / 'inputs_original.toml')).time_to_target() - 10)
+mixed, one = base.copy(), base.copy()
+mixed.heat_spreading.convection_factor = float('inf')
+one.heat_spreading.rings = 1
+check('a perfectly mixed bath is the same as one ring', abs(run(mixed).time_to_target() - run(one).time_to_target()) < 1e-9)
+fine = base.copy()
+fine.heat_spreading.rings = 32
+t8, t32 = r_def.time_to_target(), run(fine).time_to_target()
+check('8 rings are within 5 % of 32 rings', abs(t8 - t32) < 0.05 * t32, f"({t8:.1f} s against {t32:.1f} s)")
+
+# --- 5. Phase diagram -----------------------------------------------------------
 ex = Experiment(base)
 worst = max(abs(ex.freezing_point(ex.bodnar_w(x)) + x) for x in [0.5 * i for i in range(1, 42)])
 check('freezing_point() inverts Bodnar', worst < 1e-9, f"(worst {worst:.1e} K)")
@@ -96,7 +128,7 @@ gap = abs(ex.halite_saturation_w(base.phase_diagram.peritectic_temperature) - ba
 check('halite line meets the peritectic', gap < 1e-4, f"(gap {gap:.1e})")
 check('no salt: the bath stays at or above 0 C', min(results['no salt'].series('T_brine')) > -1e-6)
 
-# --- 5. The drink freezing --------------------------------------------------------
+# --- 6. The drink freezing --------------------------------------------------------
 d = base.drink
 frozen = [s for s in results['inputs.toml'].history if s.drink_frozen > 0]
 check('drink freezes once below its freezing point', len(frozen) > 0)
@@ -109,7 +141,7 @@ check('supercooled drink stays liquid, then warms when ice appears',
       coldest_liquid < d.freezing_point - 5.9 and first_ice.T_drink > coldest_liquid + 3,
       f"(liquid down to {coldest_liquid:.1f} C, {first_ice.T_drink:.1f} C once ice appears)")
 
-# --- 6. Inputs files --------------------------------------------------------------
+# --- 7. Inputs files --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
     short = Path(tmp) / 'short.toml'
     short.write_text('[bath_typo]\nmass = 1\n')

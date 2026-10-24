@@ -11,7 +11,8 @@
 const PYODIDE_URL = 'https://cdn.jsdelivr.net/npm/pyodide@0.28.3/';
 const MODEL_FILES = ['../b8_model.py', '../b8_controls.py', '../inputs.toml', '../inputs_original.toml', 'bridge.py'];
 const PLAY_SPEED = 100;                                   // seconds of the run shown per real second
-const OPEN_GROUPS = ['room', 'box', 'tank', 'water', 'ice', 'salt', 'drink', 'can', 'can_heat_transfer', 'stirrer'];
+const OPEN_GROUPS = ['room', 'box', 'tank', 'water', 'ice', 'salt', 'drink', 'can', 'can_heat_transfer',
+                     'heat_spreading', 'stirrer'];
 const TODO_TAGS = ['MEASURE', 'CHECK', 'RIG NOTE', 'ASSUMED'];
 const TAGS = {
   MEASURED: ['#15803D', 'measured on the rig'],
@@ -24,7 +25,7 @@ const TAGS = {
   MODEL: ['#1D4ED8', 'switches a piece of physics on or off'],
 };
 const COLOURS = { drink: '#C2410C', brine: '#0F766E', ice: '#1F2937', tank: '#6B7280', salt: '#7C3AED',
-                  room: '#B45309', foam: '#A16207' };
+                  room: '#B45309', foam: '#A16207', near: '#0EA5E9' };
 // matplotlib's 'coolwarm', 33 steps, so the page uses the same colours as the Python figures
 const COOLWARM = [[59,76,192],[68,90,204],[78,104,216],[88,117,225],[98,130,234],[108,143,241],[119,154,247],
   [130,166,251],[141,176,254],[152,185,255],[163,194,254],[174,201,252],[185,208,249],[195,213,244],[204,217,237],
@@ -136,26 +137,60 @@ async function start() {
 function buildQuickControls(setup) {
   for (const [section, key, label, low, high, step, unit, show] of setup.sliders) {
     const id = `slider-${section}-${key}`;
-    const input = el('input', { type: 'range', id, min: low, max: high, step });
-    const out = el('output', { htmlFor: id });
-    $('sliders').append(el('div', { className: 'slider' }, [el('label', { htmlFor: id, textContent: label }), out, input]));
+    const range = el('input', { type: 'range', id, min: low, max: high, step });
+    const box = el('input', { type: 'text', inputMode: 'decimal', spellcheck: false, className: 'num' });
+    range.setAttribute('aria-label', label);
+    box.setAttribute('aria-label', `${label} (${unit})`);
+    $('sliders').append(el('div', { className: 'slider' }, [
+      el('label', { htmlFor: id, textContent: label }),
+      el('span', { className: 'entry' }, [box, el('span', { className: 'unit', textContent: unit })]),
+      range]));
     const toShown = (v) => (show === 'log' ? Math.log10(v) : v * show);
     const fromShown = (x) => (show === 'log' ? 10 ** x : x / show);
-    const text = (v) => (show === 'log' ? `${v.toExponential(1)} ${unit}` : `${short(v * show)} ${unit}`);
-    input.addEventListener('input', () => {
-      const v = tidy(fromShown(Number(input.value)));
+    // the box holds the number in the unit shown (for a 'log' slider: the value itself)
+    const boxText = (v) => (!Number.isFinite(v) ? 'inf'
+      : show !== 'log' ? Number((v * show).toPrecision(4)).toString()
+      : Math.abs(Math.log10(v)) < 4 ? short(v) : v.toExponential(2));
+    const place = (v) => {                              // move the slider to v, widening it if need be
+      const x = toShown(v);
+      if (!Number.isFinite(x)) {                        // inf: the slider sits at its end
+        range.value = range.max;
+        return;
+      }
+      range.min = Math.min(low, x, Number(range.min));
+      range.max = Math.max(high, x, Number(range.max));
+      range.value = x;
+    };
+    range.addEventListener('input', () => {
+      const v = tidy(fromShown(Number(range.value)));
       state.inputs[section][key] = v;
-      out.textContent = text(v);
+      box.value = boxText(v);
+      box.classList.remove('invalid');
       refreshField(section, key);
     });
-    input.addEventListener('change', () => scheduleRun());
+    range.addEventListener('change', () => scheduleRun());
+    box.addEventListener('change', () => {              // Enter, or leaving the box
+      const typed = parseValue(box.value, 0);           // a number, or inf
+      if (typed === null || typed === '-inf' || (show === 'log' && typed <= 0)) {
+        box.classList.add('invalid');
+        setStatus(`${label}: "${box.value}" is not a number`, 'error');
+        return;
+      }
+      box.classList.remove('invalid');
+      const v = typed === 'inf' ? Infinity : show === 'log' ? typed : typed / show;
+      state.inputs[section][key] = typed === 'inf' ? 'inf' : tidy(v);   // used exactly as typed
+      place(v);                                         // the slider only follows
+      refreshField(section, key);
+      scheduleRun();
+    });
+    box.addEventListener('keydown', (event) => { if (event.key === 'Enter') box.blur(); });
     state.quick.push(() => {
       const v = num(state.inputs[section][key]);
-      const x = toShown(v);
-      input.min = Math.min(low, x);                     // widen the slider if the file holds a value outside it
-      input.max = Math.max(high, x);
-      input.value = x;
-      out.textContent = text(v);
+      range.min = low;
+      range.max = high;
+      place(v);
+      box.value = boxText(v);
+      box.classList.remove('invalid');
     });
   }
 
@@ -554,9 +589,15 @@ function drawTank() {
   box(-gl, -gl, L + 2 * gl, H + gl, tempColour(at('T_tank')), '#475569');
   box(0, 0, L, H, '#F8FAFC');
 
-  // brine up to the surface
+  // brine up to the surface, ring by ring: the outermost ring fills the tank, then each
+  // ring nearer the can is drawn on top of it, centred on the can
   const level = Math.min(100 * at('level'), H + 1);
-  box(0, 0, L, level, tempColour(at('T_brine'), 0.85));
+  const edges = state.run.rig.ring_edges.map((r) => 100 * r), rings = S.T_rings[i];
+  box(0, 0, L, level, tempColour(rings[rings.length - 1], 0.85));
+  for (let n = rings.length - 2; n >= 0; n--) {
+    const left = Math.max(canX - edges[n + 1], 0), right = Math.min(canX + edges[n + 1], L);
+    box(left, 0, right - left, level, tempColour(rings[n], 0.85));
+  }
   ctx.strokeStyle = '#334155';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(X(0), Y(level)); ctx.lineTo(X(L), Y(level)); ctx.stroke();
@@ -569,14 +610,18 @@ function drawTank() {
     for (const [u, v] of SALT_SPOTS.slice(0, n)) box(u * (L - 0.4), v * Math.max(saltH - 0.4, 0), 0.4, 0.4, 'white', '#9CA3AF', 0.5);
   }
 
-  // crushed ice: squares of the current piece size spread through the heap
+  // crushed ice spread through the heap; each piece is drawn at the size of the pieces in
+  // its own ring, so the ice next to the can is seen to shrink first
   if (at('ice') > 1e-6) {
     const side = 100 * at('ice_side'), bottom = 100 * at('heap_bottom'), top = 100 * at('heap_top');
+    const sides = S.ice_sides[i].map((a) => 100 * a);
+    const ringOf = (d) => { const k = edges.slice(1).findIndex((e) => d < e); return k < 0 ? sides.length - 1 : k; };
     const area = (1 - p.ice.heap_porosity) * L * (top - bottom);
     const n = Math.min(ICE_SPOTS.length, Math.max(1, Math.round(area / (side * side))));
     ctx.globalAlpha = 0.95;
     for (const [u, v] of ICE_SPOTS.slice(0, n)) {
-      box(u * (L - side), bottom + v * Math.max(top - bottom - side, 0), side, side, '#E0F2FE', '#7DD3FC', 0.8);
+      const x = u * L, a = sides[ringOf(Math.abs(x - canX))];
+      if (a > 0) box(Math.min(Math.max(x - a / 2, 0), L - a), bottom + v * Math.max(top - bottom - a, 0), a, a, '#E0F2FE', '#7DD3FC', 0.8);
     }
     ctx.globalAlpha = 1;
     label(0.03 * L, Math.min(bottom + (top - bottom) / 2, H - 1), [`ice ${at('ice').toFixed(2)} kg`,
@@ -611,6 +656,8 @@ function drawTank() {
   if (frozen > 0) drinkLines.push(`${Math.round(100 * frozen)} % frozen`);
   if (!inBath) drinkLines.push(`in at ${mmss(num(p.drink.goes_in_at))}`);
   label(cx, cy + canH / 2, drinkLines, { align: 'center', middle: true });
+  if (inBath) label(cx + r + 0.3, cy + 0.2 * canH + 3 * font / k, ['next to', 'the can', `${at('T_near').toFixed(1)} °C`],
+    { colour: COLOURS.near, size: font * 0.9 });
 
   // brine, glass, foam and the clock
   label(L - 0.5, Math.max(level - 1, 0.8 + Math.max(saltH, 0)),
@@ -720,7 +767,8 @@ function updateCharts() {
 
   c.temperatures.data.datasets = [
     line('drink', S.T_drink.map((v, n) => (S.drink_in[n] ? v : null)), COLOURS.drink),
-    line('brine', S.T_brine, COLOURS.brine),
+    line('brine (bulk)', S.T_brine, COLOURS.brine),
+    line('brine next to the can', S.T_near.map((v, n) => (S.drink_in[n] ? v : null)), COLOURS.near, { borderWidth: 1.3 }),
     line('ice surface', S.T_surface, COLOURS.brine, { borderDash: [4, 3], borderWidth: 1.2 }),
     line('ice (inside)', S.T_ice, COLOURS.ice, { borderWidth: 1 }),
     line('tank glass', S.T_tank, COLOURS.tank, { borderWidth: 1 }),
@@ -733,12 +781,15 @@ function updateCharts() {
     line('salt crystals (g)', scaled('salt_solid', 1000), COLOURS.salt, { yAxisID: 'y2' }),
     line('ice in the drink (g)', scaled('drink_frozen', 1000 * state.run.rig.drink_water), COLOURS.drink,
       { yAxisID: 'y2', borderDash: [5, 3] }),
+    line(`ice within ${(100 * (state.run.rig.ring_edges[1] - state.run.rig.ring_edges[0])).toFixed(1)} cm of the can (g)`,
+      scaled('ice_near', 1000), COLOURS.near, { yAxisID: 'y2', borderWidth: 1.3 }),
   ];
   c.masses.options.scales.y.min = 0;
 
   c.heat.data.datasets = [
     line('drink → brine', S.Q_drink, COLOURS.drink),
     line('brine → ice (melting)', S.Q_ice, COLOURS.brine),
+    line('from the can outwards', S.Q_spread, COLOURS.near, { borderWidth: 1.3 }),
     line('glass → brine', S.Q_tank, COLOURS.tank),
     line('room → box', S.Q_room, COLOURS.room, { borderDash: [2, 2] }),
   ];

@@ -113,6 +113,7 @@ held_down = true              # -          MODEL       true: the can stands at b
 inside_h = 400.0              # W/(m^2 K)  LITERATURE  drink side, unstirred (Chem. Eng. Educ. bottle study),
                               #                        at a 25 K drink-to-brine difference
 outside_h = 270.0             # W/(m^2 K)  ASSUMED     brine side, chosen so U ~ 160 (SINTEF tau ~ 265 s)
+                              #                        when the bath was taken as perfectly mixed
 reference_dT = 25.0           # K          LITERATURE  the drink-to-brine difference the two h values
                               #                        apply at
 inside_power_law = true       # -          MODEL       true: the drink-side h follows free convection,
@@ -121,10 +122,25 @@ inside_power_law = true       # -          MODEL       true: the drink-side h fo
 outside_power_law = false     # -          MODEL       the same for the brine side.  true is the consistent
                               #                        choice for an unstirred bath, but outside_h was set
                               #                        as a constant to match SINTEF: refit it if you switch it on
-measured_U = 0.0              # W/(m^2 K)  MEASURE     overall drink -> brine U from a real run; when it is
-                              #                        above 0 it replaces the two films above.  Fit
+measured_U = 0.0              # W/(m^2 K)  MEASURE     drink -> brine U from a real run; when it is above 0
+                              #                        it replaces the two films above.  Fit
                               #                        ln(T_drink - T_brine) against time: the slope is
-                              #                        -1/tau, and U = C_drink / (tau * can area)
+                              #                        -1/tau, and U = C_drink / (tau * can area).  Use a
+                              #                        probe within ~5 mm of the can.  Fitted against a probe
+                              #                        in the bulk, U already includes the spreading: then
+                              #                        also set [heat_spreading] convection_factor = inf
+
+
+[heat_spreading]              # how the drink's heat gets from the can into the rest of the bath
+rings = 8                     # -          CHOICE      how many rings the bath is split into, from the can out
+                              #                        to the walls (thin near the can).  More is finer and slower
+convection_factor = 20.0      # -          ASSUMED     effective conductivity of the bath / conductivity of
+                              #                        still brine.  1 = still brine, heat moves by conduction
+                              #                        only; 2-3 = still brine among the ice; ~20-60 = natural
+                              #                        convection through the ice bed (a rough estimate, see
+                              #                        README.md); more if stirred; inf = perfectly mixed (the
+                              #                        first version).  A probe at the can against one out in
+                              #                        the bath measures it
 
 
 [stirrer]
@@ -149,6 +165,9 @@ brine_heat_capacity = [4189.0, -5794.0, 8579.0]
                               #                        Fit to Melinder (2010) NaCl(aq), -20 to +10 C, +-33
 brine_density = [1000.0, 786.0]
                               # kg/m^3     LITERATURE  rho = a + b w.  Fit to Melinder (2010), +-9
+brine_conductivity = [0.5725, -0.149]
+                              # W/(m K)    LITERATURE  k = a + b w, still brine.  Fit to Melinder (2010),
+                              #                        -20 to +10 C, +-0.024
 
 
 [phase_diagram]               # NaCl + water

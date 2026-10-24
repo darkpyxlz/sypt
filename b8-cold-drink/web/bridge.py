@@ -68,20 +68,23 @@ def run(text):
     frames = result.history[::every]
     if frames[-1] is not result.history[-1]:
         frames.append(result.history[-1])
-    names = ['t', 'T_drink', 'drink_frozen', 'T_brine', 'w', 'T_surface', 'T_ice', 'T_tank', 'T_foam',
-             'ice', 'salt_solid', 'level', 'submerged', 'can_base', 'heap_bottom', 'heap_top',
-             'Q_drink', 'Q_ice', 'Q_tank']
+    names = ['t', 'T_drink', 'drink_frozen', 'T_brine', 'T_near', 'w', 'T_surface', 'T_ice', 'T_tank', 'T_foam',
+             'ice', 'ice_near', 'salt_solid', 'level', 'submerged', 'can_base', 'heap_bottom', 'heap_top',
+             'Q_drink', 'Q_spread', 'Q_ice', 'Q_tank']
     series = {n: [round(getattr(s, n), 6) for s in frames] for n in names}
     series['drink_in'] = [s.drink_in for s in frames]
     series['Q_room'] = [round(s.Q_room_walls + s.Q_room_lid, 6) for s in frames]
     series['ice_side'] = [round(ex.ice_piece_side(s.ice), 6) if s.ice > 0 else 0 for s in frames]
+    series['T_rings'] = [[round(T, 3) for T in s.T_rings] for s in frames]
+    series['ice_sides'] = [[round(ex.ice_piece_side(m, ex.n_ice_pieces * share), 5) if m > 1e-9 else 0
+                            for m, share in zip(s.ice_rings, ex.ring_shares)] for s in frames]
     return json.dumps(_to_json({
         'series': series,
         'summary': result.summary(),
         'lines': result.summary_lines(),
         'warnings': result.warnings,
         'rig': {
-            'floor_area': ex.floor_area, 'drink_water': ex.freezable_water,
+            'floor_area': ex.floor_area, 'drink_water': ex.freezable_water, 'ring_edges': ex.ring_edges,
             'UA_box': ex.UA_walls + ex.UA_lid, 'U_can_at_25K': ex.can_U(25.0),
         },
     }))

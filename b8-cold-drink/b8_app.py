@@ -4,7 +4,9 @@ b8_app.py -- the B8 model behind sliders, with a live drawing of the tank.
     python3 b8_app.py                        start from inputs.toml
     python3 b8_app.py --inputs my_run.toml   start from another inputs file
 
-Move any slider or switch and the whole run is repeated (well under a second).
+Move any slider, or type a number in the box beside it and press Enter, and the
+whole run is repeated (well under a second).  A typed number is used exactly as
+typed, even outside the slider's range.
 Drag the time slider, press Play, or use the arrow keys, to watch the tank
 through the run.  "Save inputs" writes the current settings to a new .toml file
 in this folder; run it again with  python3 b8_simple.py --inputs <that file>.
@@ -19,7 +21,7 @@ import math
 import time
 
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
+from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider, TextBox
 
 import b8_plots
 from b8_controls import OPTIONS, SLIDERS, SWITCHES
@@ -65,23 +67,25 @@ class App:
     def _build_controls(self):
         fig = self.fig
         fig.text(0.015, 0.975, 'Inputs', fontsize=12, weight='bold', va='top')
-        fig.text(0.015, 0.952, 'drag a slider: the run repeats.  Everything else is in the inputs file.',
-                 fontsize=7.5, color='grey', va='top')
-        self.sliders = []
+        fig.text(0.015, 0.952, 'drag a slider, or type a number in its box and press Enter.  '
+                 'Everything else is in the inputs file.', fontsize=7.5, color='grey', va='top')
+        self.sliders, self.entries = [], []
         y = 0.915
         for section, key, label, low, high, step, unit, show in SLIDERS:
             value = getattr(self.p.sections[section], key)
-            shown = math.log10(value) if show == 'log' else value * show
+            shown = self._position(value, show, low, high)
             low, high = min(low, shown), max(high, shown)
-            ax = fig.add_axes([0.105, y, 0.105, 0.019])
-            s = Slider(ax, label, low, high, valinit=shown, valstep=step,
-                       valfmt=f'%.3g {unit}' if show != 'log' else '%.2f')
-            s.label.set_fontsize(8)
-            s.valtext.set_fontsize(8)
-            if show == 'log':
-                s.valtext.set_text(f'{value:.1e} {unit}')
-            s.on_changed(lambda v, entry=(section, key, show, unit, s): self._slider_moved(entry, v))
-            self.sliders.append(s)
+            slider = Slider(fig.add_axes([0.105, y, 0.1, 0.019]), f'{label} ({unit})', low, high,
+                            valinit=shown, valstep=step)
+            slider.label.set_fontsize(8)
+            slider.valtext.set_visible(False)                # the number is in the box beside it
+            box = TextBox(fig.add_axes([0.21, y - 0.002, 0.055, 0.023]), '', initial=self._text(value, show))
+            box.text_disp.set_fontsize(8)
+            entry = (section, key, show, slider, box)
+            slider.on_changed(lambda v, entry=entry: self._slider_moved(entry, v))
+            box.on_submit(lambda text, entry=entry: self._number_typed(entry, text))
+            self.sliders.append(slider)
+            self.entries.append(entry)
             y -= 0.031
 
         y -= 0.01
@@ -110,12 +114,55 @@ class App:
         self.reset_button.on_clicked(lambda _: self.reset())
         self.message = fig.text(0.015, 0.008, '', fontsize=8, color='grey')
 
+    @staticmethod
+    def _position(value, show, low, high):
+        """Where a slider sits for a value.  An infinite value (inf typed in the box)
+        puts it at the end of its range."""
+        if math.isinf(value):
+            return high if value > 0 else low
+        return math.log10(value) if show == 'log' else value * show
+
+    @staticmethod
+    def _text(value, show):
+        """The number shown in a slider's box: the value itself for a 'log' slider."""
+        return f'{value:.3g}' if show == 'log' else f'{value * show:.4g}'
+
+    @staticmethod
+    def _quietly(widget, action):
+        """Change a widget without it calling back (so slider and box do not loop)."""
+        widget.eventson = False
+        action()
+        widget.eventson = True
+
     def _slider_moved(self, entry, v):
-        section, key, show, unit, slider = entry
-        value = 10 ** v if show == 'log' else v / show
+        section, key, show, slider, box = entry
+        value = round(10 ** v if show == 'log' else v / show, 12)
+        setattr(self.p.sections[section], key, value)
+        self._quietly(box, lambda: box.set_val(self._text(value, show)))
+        self.schedule_rerun()
+
+    def _number_typed(self, entry, text):
+        """A number typed in a slider's box is used exactly as typed; the slider follows,
+        widening if the number is outside its range."""
+        section, key, show, slider, box = entry
+        try:
+            typed = float(text.strip())                   # also takes inf
+            value = typed if show == 'log' else typed / show
+            if math.isnan(value) or (show == 'log' and value <= 0):
+                raise ValueError
+        except ValueError:
+            self.message.set_text(f'"{text}" is not a number')
+            current = getattr(self.p.sections[section], key)
+            self._quietly(box, lambda: box.set_val(self._text(current, show)))
+            self.fig.canvas.draw_idle()
+            return
         setattr(self.p.sections[section], key, round(value, 12))
-        if show == 'log':
-            slider.valtext.set_text(f'{value:.1e} {unit}')
+        x = self._position(value, show, slider.valmin, slider.valmax)
+        if not slider.valmin <= x <= slider.valmax:
+            slider.valmin, slider.valmax = min(slider.valmin, x), max(slider.valmax, x)
+            slider.ax.set_xlim(slider.valmin, slider.valmax)       # (the grey track is drawn in axes
+                                                                   # fractions, so it follows by itself)
+        self._quietly(slider, lambda: slider.set_val(x))
         self.schedule_rerun()
 
     def _switch_flipped(self, label):
@@ -217,6 +264,9 @@ class App:
         for r, (section, key, _, options) in zip(self.choices, OPTIONS):
             r.set_active(options.index(getattr(self.p.sections[section], key)))
         self.p = self.original.copy()                 # the widgets' callbacks changed it again
+        for section, key, show, slider, box in self.entries:
+            value = getattr(self.p.sections[section], key)
+            self._quietly(box, lambda: box.set_val(self._text(value, show)))
         self.rerun()
 
 

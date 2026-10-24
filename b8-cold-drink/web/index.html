@@ -45,6 +45,9 @@
           <option value="upload" hidden>an uploaded file</option>
         </select>
       </label>
+      <p class="hint">Drag a slider, or type a number in its box and press Enter. A typed number is used
+        exactly, even outside the slider's range. For heat spreading, <code>inf</code> means a perfectly
+        mixed bath.</p>
       <div id="sliders" class="sliders"></div>
       <div id="switches" class="switches"></div>
       <div id="options" class="options"></div>
@@ -98,6 +101,10 @@
   <p>The bath is brine, crushed ice and salt crystals. Salt dissolves and ice melts at finite rates. Heat flows
     between the room, the foam, the glass, the brine, the ice and the drink, and the model steps the heat
     content of each forward every half second, so energy is conserved (every run reports the check). The
+    drink's heat does not reach the whole bath at once: the bath is split into rings around the can, and heat
+    crosses from ring to ring at the rate still brine conducts it, times a <em>convection factor</em> for the
+    brine moving through the ice (1 = still, 20 by default, inf = perfectly mixed). So the brine next to the
+    can warms first and its ice melts first, as the tank picture shows. The
     drink can freeze, gradually, as its sugar concentrates. The page loads
     <a href="https://pyodide.org">Pyodide</a> (Python compiled for the browser), copies in the model files
     unchanged, and runs them on your computer. Nothing is sent anywhere.</p>
@@ -108,9 +115,11 @@
     <code>python3 b8_simple.py --inputs b8_inputs.toml</code>, and <em>Load .toml</em> reads it back here, as
     does a short file holding only the lines that change. <em>Copy link</em> puts your changes in the address,
     so you can send a scenario to someone else.</p>
-  <p>What matters most for the time to 5 °C is the heat transfer across the can: fit a drink run and enter the
-    measured U. For the bath temperature, it is the ice and salt rates: a 15-minute run with no drink pins
-    them, and tells "bulk" from "salt-limited" ice surfaces.</p>
+  <p>What matters most for the time to 5 °C is the heat transfer across the can: fit a drink run against a
+    brine probe within about 5 mm of the can and enter the measured U. A second probe out in the bath measures
+    the convection factor: the default puts the brine next to the can about 6 K above the rest. For the bath
+    temperature, it is the ice and salt rates: a 15-minute run with no drink pins them, and tells "bulk" from
+    "salt-limited" ice surfaces.</p>
 </footer>
 </body>
 </html>

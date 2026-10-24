@@ -21,6 +21,9 @@ freezes = false
 [can_heat_transfer]
 inside_power_law = false
 
+[heat_spreading]
+convection_factor = inf       # the bath was one well-mixed temperature
+
 [materials]
 ice_heat_capacity = 2000.0
 ice_heat_capacity_slope = 0.0
