@@ -42,6 +42,7 @@
         <select id="preset">
           <option value="inputs">inputs.toml (the rig)</option>
           <option value="original">inputs_original.toml (first version)</option>
+          <option value="box_test">box_test.toml (the box test: water only)</option>
           <option value="upload" hidden>an uploaded file</option>
         </select>
       </label>
@@ -104,7 +105,10 @@
     drink's heat does not reach the whole bath at once: the bath is split into rings around the can, and heat
     crosses from ring to ring at the rate still brine conducts it, times a <em>convection factor</em> for the
     brine moving through the ice (1 = still, 20 by default, inf = perfectly mixed). So the brine next to the
-    can warms first and its ice melts first, as the tank picture shows. The
+    can warms first and its ice melts first, as the tank picture shows. The styrofoam box is not a perfect
+    insulator: heat from the room leaks in through its walls, its floor (the tank stands on it), its lid and the
+    gaps around the lid, about 0.34 W/K in all, and every run says how much came in from the room and how
+    much from the drink. The energy bookkeeping line only checks that every joule is accounted for. The
     drink can freeze, gradually, as its sugar concentrates. The page loads
     <a href="https://pyodide.org">Pyodide</a> (Python compiled for the browser), copies in the model files
     unchanged, and runs them on your computer. Nothing is sent anywhere.</p>
@@ -119,7 +123,9 @@
     brine probe within about 5 mm of the can and enter the measured U. A second probe out in the bath measures
     the convection factor: the default puts the brine next to the can about 6 K above the rest. For the bath
     temperature, it is the ice and salt rates: a 15-minute run with no drink pins them, and tells "bulk" from
-    "salt-limited" ice surfaces.</p>
+    "salt-limited" ice surfaces. For how fast the bath warms, it is the box's leak: start from
+    <code>box_test.toml</code>, log 5 kg of cold water in the closed box for 3 hours, and move <em>box leak,
+    measured</em> until the curve matches (the README gives a formula too).</p>
 </footer>
 </body>
 </html>

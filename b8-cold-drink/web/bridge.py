@@ -51,6 +51,7 @@ def setup():
     return json.dumps({
         'inputs': _to_json(M.load_inputs().as_dict()),
         'original': _to_json(M.load_inputs(M.HERE / 'inputs_original.toml').as_dict()),
+        'box_test': _to_json(M.load_inputs(M.HERE / 'box_test.toml').as_dict()),
         'about': M.describe_inputs(),
         'sliders': SLIDERS, 'switches': SWITCHES, 'options': OPTIONS,
     })
@@ -73,7 +74,7 @@ def run(text):
              'Q_drink', 'Q_spread', 'Q_ice', 'Q_tank']
     series = {n: [round(getattr(s, n), 6) for s in frames] for n in names}
     series['drink_in'] = [s.drink_in for s in frames]
-    series['Q_room'] = [round(s.Q_room_walls + s.Q_room_lid, 6) for s in frames]
+    series['Q_room'] = [round(s.Q_room_walls + s.Q_room_lid + s.Q_gaps, 6) for s in frames]
     series['ice_side'] = [round(ex.ice_piece_side(s.ice), 6) if s.ice > 0 else 0 for s in frames]
     series['T_rings'] = [[round(T, 3) for T in s.T_rings] for s in frames]
     series['ice_sides'] = [[round(ex.ice_piece_side(m, ex.n_ice_pieces * share), 5) if m > 1e-9 else 0
@@ -85,7 +86,7 @@ def run(text):
         'warnings': result.warnings,
         'rig': {
             'floor_area': ex.floor_area, 'drink_water': ex.freezable_water, 'ring_edges': ex.ring_edges,
-            'UA_box': ex.UA_walls + ex.UA_lid, 'U_can_at_25K': ex.can_U(25.0),
+            'UA_box': ex.box_UA, 'U_can_at_25K': ex.can_U(25.0),
         },
     }))
 

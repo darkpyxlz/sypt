@@ -11,6 +11,8 @@ outside_air_h = inf           # no air films: the foam was the only resistance
 side_gap_h = inf
 lid_gap_h = inf
 foam_density = 0.0            # and it held no heat
+tank_on_floor = false         # the base was treated like the walls
+gaps_leak = 0.0               # and the box had no gaps
 
 [salt]
 dissolves_as = "hydrohalite"

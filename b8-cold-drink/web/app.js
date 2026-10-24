@@ -9,7 +9,9 @@
 'use strict';
 
 const PYODIDE_URL = 'https://cdn.jsdelivr.net/npm/pyodide@0.28.3/';
-const MODEL_FILES = ['../b8_model.py', '../b8_controls.py', '../inputs.toml', '../inputs_original.toml', 'bridge.py'];
+const MODEL_FILES = ['../b8_model.py', '../b8_controls.py', '../inputs.toml', '../inputs_original.toml',
+  '../box_test.toml', 'bridge.py'];
+const PRESET_FILES = { inputs: 'inputs.toml', original: 'inputs_original.toml', box_test: 'box_test.toml' };
 const PLAY_SPEED = 100;                                   // seconds of the run shown per real second
 const OPEN_GROUPS = ['room', 'box', 'tank', 'water', 'ice', 'salt', 'drink', 'can', 'can_heat_transfer',
                      'heat_spreading', 'stirrer'];
@@ -35,7 +37,7 @@ const COOLWARM = [[59,76,192],[68,90,204],[78,104,216],[88,117,225],[98,130,234]
 const T_LOW = -22, T_HIGH = 30;                           // ends of the colour scale, degC
 
 const state = {
-  bridge: null, defaults: null, original: null, base: null, inputs: null, about: null, options: [],
+  bridge: null, defaults: null, presets: {}, base: null, inputs: null, about: null, options: [],
   quick: [], fields: {}, charts: {}, run: null, runInputs: null, frame: 0, playing: false, playT: 0,
 };
 
@@ -107,7 +109,7 @@ async function start() {
     state.bridge = py.pyimport('bridge');
     const setup = JSON.parse(state.bridge.setup());
     state.defaults = setup.inputs;
-    state.original = setup.original;
+    state.presets = { inputs: setup.inputs, original: setup.original, box_test: setup.box_test };
     state.about = setup.about;
     state.options = setup.options;
     state.base = setup.inputs;
@@ -354,8 +356,8 @@ function wireButtons() {
   $('preset').addEventListener('change', () => {
     const preset = $('preset').value;
     if (preset === 'upload') return;
-    state.base = preset === 'original' ? state.original : state.defaults;
-    useInputs(clone(state.base), `Started again from ${preset === 'original' ? 'inputs_original.toml' : 'inputs.toml'}.`);
+    state.base = state.presets[preset];
+    useInputs(clone(state.base), `Started again from ${PRESET_FILES[preset]}.`);
   });
   $('reset').addEventListener('click', () => useInputs(clone(state.base), 'Back to the starting values.'));
   $('load').addEventListener('click', () => $('file').click());
@@ -494,7 +496,8 @@ function setFrame(i) {
   $('time').value = i;
   const S = state.run.series, t = S.t[i];
   const tIn = num(state.runInputs.drink.goes_in_at);
-  $('clock').textContent = `t = ${mmss(t)}  ` + (S.drink_in[i] ? `(drink in ${mmss(t - tIn)})` : `(drink in at ${mmss(tIn)})`);
+  $('clock').textContent = `t = ${mmss(t)}  ` + (S.drink_in[i] ? `(drink in ${mmss(t - tIn)})`
+    : Number.isFinite(tIn) ? `(drink in at ${mmss(tIn)})` : '(no drink in this run)');
   drawTank();
   for (const chart of Object.values(state.charts)) chart.draw();
 }
@@ -654,7 +657,7 @@ function drawTank() {
   ctx.globalAlpha = 1;
   const drinkLines = ['drink', `${at('T_drink').toFixed(1)} °C`];
   if (frozen > 0) drinkLines.push(`${Math.round(100 * frozen)} % frozen`);
-  if (!inBath) drinkLines.push(`in at ${mmss(num(p.drink.goes_in_at))}`);
+  if (!inBath) drinkLines.push(Number.isFinite(num(p.drink.goes_in_at)) ? `in at ${mmss(num(p.drink.goes_in_at))}` : 'not in this run');
   label(cx, cy + canH / 2, drinkLines, { align: 'center', middle: true });
   if (inBath) label(cx + r + 0.3, cy + 0.2 * canH + 3 * font / k, ['next to', 'the can', `${at('T_near').toFixed(1)} °C`],
     { colour: COLOURS.near, size: font * 0.9 });
@@ -715,7 +718,8 @@ const guides = {
       ctx.beginPath(); ctx.moveTo(area.left, py); ctx.lineTo(area.right, py); ctx.stroke();
       ctx.restore();
     }
-    vline(num(state.runInputs.drink.goes_in_at) / 60, '#9CA3AF', [5, 4]);
+    const tIn = num(state.runInputs.drink.goes_in_at);
+    if (Number.isFinite(tIn)) vline(tIn / 60, '#9CA3AF', [5, 4]);
     vline(state.run.series.t[state.frame] / 60, COLOURS.ice, []);
   },
 };
@@ -769,8 +773,8 @@ function updateCharts() {
     line('drink', S.T_drink.map((v, n) => (S.drink_in[n] ? v : null)), COLOURS.drink),
     line('brine (bulk)', S.T_brine, COLOURS.brine),
     line('brine next to the can', S.T_near.map((v, n) => (S.drink_in[n] ? v : null)), COLOURS.near, { borderWidth: 1.3 }),
-    line('ice surface', S.T_surface, COLOURS.brine, { borderDash: [4, 3], borderWidth: 1.2 }),
-    line('ice (inside)', S.T_ice, COLOURS.ice, { borderWidth: 1 }),
+    line('ice surface', S.T_surface.map((T, i) => (S.ice[i] > 0 ? T : null)), COLOURS.brine, { borderDash: [4, 3], borderWidth: 1.2 }),
+    line('ice (inside)', S.T_ice.map((T, i) => (S.ice[i] > 0 ? T : null)), COLOURS.ice, { borderWidth: 1 }),
     line('tank glass', S.T_tank, COLOURS.tank, { borderWidth: 1 }),
     line('foam (middle)', S.T_foam, COLOURS.foam, { borderWidth: 1, borderDash: [2, 2] }),
   ];

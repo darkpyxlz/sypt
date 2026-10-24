@@ -10,7 +10,8 @@ from b8_model import CHOICES
 # (section, key, label, low, high, step, unit shown, how to show it)
 # "how to show it" is the factor from the SI value in inputs.toml to the unit
 # shown, or 'log' for a slider that moves in powers of ten.  Typing inf in a
-# slider's box is allowed (convection factor inf = a perfectly mixed bath).
+# slider's box is allowed (convection factor inf = a perfectly mixed bath;
+# drink goes in at inf = no drink, as in the box test).
 SLIDERS = [
     ('ice', 'mass', 'ice', 0.5, 8.0, 0.1, 'kg', 1),
     ('water', 'mass', 'water', 0.0, 5.0, 0.1, 'kg', 1),
@@ -30,6 +31,7 @@ SLIDERS = [
     ('salt', 'grain_size', 'salt grain size', 0.1, 3.0, 0.05, 'mm', 1000),
     ('salt', 'dissolve_coefficient', 'salt dissolving k', -7.0, -4.0, 0.05, 'm/s', 'log'),
     ('stirrer', 'power', 'stirrer power', 0.0, 10.0, 0.5, 'W', 1),
+    ('box', 'measured_UA', 'box leak, measured (0: work it out)', 0.0, 2.0, 0.01, 'W/K', 1),
 ]
 
 # (section, key, label) for true/false inputs

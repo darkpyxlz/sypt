@@ -11,6 +11,7 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 |---|---|
 | `inputs.toml` | **Every number the simulation uses.** Put your measurements here. |
 | `inputs_original.toml` | The physics of the first `b8_simple.py`, for comparison. |
+| `box_test.toml` | The box test: water only, to measure how fast heat leaks into the box. |
 | `b8_model.py` | The physics. You should not need to edit it for a new measurement. |
 | `b8_simple.py` | One run from the command line: a table, a summary and a picture. |
 | `b8_app.py` | The same model behind sliders (each with a box to type a number into), with a live drawing of the tank. |
@@ -46,7 +47,8 @@ On a machine with no display, set `MPLBACKEND=Agg` (or pass `--no-show`).
 Python 3.11 or later is needed (for `tomllib`).
 
 With the numbers in `inputs.toml`, `b8_simple.py` prints
-`drink reaches 5 C 202 s after it goes in` and an energy check of about 0 J.
+`drink reaches 5 C 202 s after it goes in`, the heat taken in from the drink and from
+the room, and an energy bookkeeping error of about 0 J.
 With `--inputs inputs_original.toml` it gives the first version's 178 s.
 
 **The app.** Move a slider, or type a number in the box beside it and press Enter, and
@@ -121,18 +123,20 @@ These are the ones that matter:
 |---|---|---|---|
 | `can_heat_transfer.outside_h` | ÷3 to ×3 | 407 to 133 s | – |
 | `can_heat_transfer.measured_U`, if you measure it | 120 to 200 W/(m² K) | 265 to 171 s | – |
-| `heat_spreading.convection_factor` | 1 (still) / 5 to 100 / inf (mixed) | 318 / 242 to 180 / 169 s | −19.4 / −20.0 to −20.6 / −20.7 °C |
+| `heat_spreading.convection_factor` | 1 (still) / 5 to 100 / inf (mixed) | 318 / 242 to 180 / 169.5 s | −19.3 / −19.9 to −20.6 / −20.7 °C |
 | `can.held_down` | held / floating | 202 / 284 s | – |
 | `drink.mass`, `drink.heat_capacity` | ±20 % | 245 to 161 s | – |
-| `ice.brine_to_ice_h` | ÷3 to ×3 | 231 to 190 s | −16.9 to −21.0 °C |
+| `ice.brine_to_ice_h` | ÷3 to ×3 | 231 to 190 s | −16.8 to −21.0 °C |
 | `can_heat_transfer.inside_h` | ±20 % | 219 to 191 s | – |
 | `drink.start_temperature` | ±2 K | 216 to 189 s | – |
 | `salt.dissolve_coefficient` | ÷3 to ×3 | 212 to 202 s | −18.5 to −20.5 °C |
-| `ice.piece_size` | ±20 % | 200 to 205 s | −20.7 to −20.1 °C |
+| `ice.piece_size` | ±20 % | 200 to 205 s | −20.6 to −20.1 °C |
 | `ice.surface_model` | bulk / salt-limited | 202 / 294 s | −20.4 / −10.9 °C |
+| `box.measured_UA`, the box's leak | 0.25 to 1.0 W/K | 202 to 203 s | −20.5 to −19.8 °C; at the end of the run −19.5 to −17.5 °C |
 
 Everything else changes the time by 0.5 s or less and the bath by 0.25 K or less.
-That leads to three cheap experiments:
+The box's leak hardly touches the drink, but it sets how fast the bath warms and
+how long it lasts. That leads to four cheap experiments:
 
 1. **A drink run, logging the drink and the brine within about 5 mm of the can.** Plot
    ln(T_drink − T_brine) against time. The slope is −1/τ, and
@@ -147,6 +151,8 @@ That leads to three cheap experiments:
 3. **A blank run: make up the bath, no drink, log the brine for 15 min.** This pins
    `brine_to_ice_h` and `dissolve_coefficient`. It also decides the ice surface
    model: "bulk" predicts −20.4 °C at 15 min, "salt-limited" predicts −10.9 °C.
+4. **The box test: cold water only, lid on, for 3 hours.** This measures the box's
+   leak, `box.measured_UA` (see "The box is not a perfect insulator" below).
 
 Weigh the drink (full can minus empty), and take its heat capacity from the sugar
 on the label (about 4180 × (1 − 0.6 × sugar fraction) J/(kg K)). **Hold the can down:**
@@ -196,7 +202,7 @@ the perfectly mixed bath, which reproduces the first version exactly. Between 20
 the time to 5 °C only moves from 202 to 185 s, because by then the can's own films
 dominate; below 10 it rises quickly (10: 219 s, 3: 263 s).
 
-With the defaults the drink reaches 5 °C in 202 s (perfectly mixed: 169 s). The brine
+With the defaults the drink reaches 5 °C in 202 s (perfectly mixed: 169.5 s). The brine
 next to the can peaks at −14.1 °C while the bulk stays at −20.4 °C, and the ice within
 0.6 cm of the can falls from 92 g to 39 g. The brine-side film coefficient `outside_h`
 (270 W/(m² K)) is left as it was: a free-convection estimate for brine on a 12 cm
@@ -207,15 +213,58 @@ Time to 5 °C against the number of rings (1 ring is the perfectly mixed bath):
 
 | `convection_factor` | 1 ring | 4 rings | 8 rings | 16 rings | 32 rings | 50 rings |
 |---|---|---|---|---|---|---|
-| 1 (still brine) | 169 s | 240 s | 318 s | 377 s | 411 s | 424 s |
-| 5 | 169 s | 218 s | 242 s | 256 s | 263 s | 266 s |
-| 20 (default) | 169 s | 196 s | 202 s | 206 s | 208 s | 209 s |
-| 100 | 169 s | 178 s | 180 s | 180 s | 181 s | 181 s |
+| 1 (still brine) | 169.5 s | 240 s | 318 s | 377 s | 411 s | 424 s |
+| 5 | 169.5 s | 218 s | 242 s | 256 s | 263 s | 266 s |
+| 20 (default) | 169.5 s | 196 s | 202 s | 206 s | 208 s | 209 s |
+| 100 | 169.5 s | 178 s | 180 s | 180 s | 181 s | 181 s |
 
 At the default, 8 rings are within 3 % of 50 (the most allowed). In still brine the
 warm layer against the can is much thinner than the inner ring, so it takes many more
 rings to resolve; use 50 if you set `convection_factor` below about 5.
 `python3 b8_simple.py --report-figure` redraws the report's figure of all this.
+
+### The box is not a perfect insulator
+
+The room is at 28 °C and the bath at −20 °C, so heat leaks in through the styrofoam
+the whole time, and the model counts it. Every run says how much came in: with the
+defaults, 43.2 kJ from the room over the 50-minute run, against 141.2 kJ from the
+drink. The "energy bookkeeping" line at the end does not mean the box is sealed. It
+checks that every joule is accounted for: what came in from the drink, the room and
+the stirrer equals what the bath, the ice, the glass and the foam gained.
+
+The heat comes in four ways, each through the room's air film on the outside of the
+foam (`box.outside_air_h`):
+
+| Path | Leak with the defaults |
+|---|---|
+| foam walls → air gap → tank glass → brine | 0.20 W/K |
+| foam floor → tank glass → brine: the tank stands on the foam, with no air gap (`box.tank_on_floor`) | 0.07 W/K |
+| foam lid → still air → brine | 0.05 W/K |
+| gaps, straight to the brine: the lid seam (about 0.01 W/K for a 1 mm gap, 0.05 for 5 mm), the lid's thin lip, the holes for probe leads (`box.gaps_leak`) | 0.02 W/K |
+| **all of them** | **0.34 W/K** |
+
+The foam also holds heat (280 J/K): a box that starts at room temperature gives up
+about 6 kJ as it cools. Next to the can (5.3 W/K) the leak is small, so it hardly
+moves the drink: a box leaking 0.25 to 1.0 W/K gives 202 to 203 s. It shows in the
+bath instead. By the end of the run the default bath has warmed to −19.2 °C with
+2.08 kg of ice left; at 1.0 W/K it would be −17.5 °C with 1.91 kg. That matters for
+back-to-back runs and for how long a bath lasts.
+
+A real box leaks more than the sums say: thin spots, the seams, foam that is damp or
+lighter than expected (0.033–0.040 W/(m K)). So measure it. **The box test:** put
+5 kg of cold water from the fridge in the tank, with no ice and no salt. Put the lid
+on as it will be in a real run, with the probe leads through the same gaps. Log the
+water for 3 hours, stirring before each reading. Skip the first 30 minutes, while the
+room-temperature glass warms the water. Then
+
+    leak (W/K) = C × ln[(T_room − T at 30 min) / (T_room − T at the end)] / (seconds from 30 min to the end)
+
+with C = 4190 × (water mass in kg) + 2020 J/K (the tank glass, 2.40 kg). With the
+defaults the model predicts 6.7 °C at 30 min and 9.4 °C at 3 hours, and this formula
+gives back its leak to within 1 %. Or run `python3 b8_simple.py --inputs box_test.toml`
+(or pick box_test.toml under "Start from" on the web page), set your water mass and
+starting temperature, and move "box leak, measured" until the curve matches your log.
+Put the number in `box.measured_UA`: every path is then scaled to add up to it.
 
 ### What changed from the first version
 
@@ -233,14 +282,16 @@ Each change was switched on alone, on top of the first version's physics:
 | Halite solubility 35.65 g/100 g at 0 °C | Matches handbooks and meets the peritectic. The old fit left a 0.2 wt % step there | 178 s | −20.11 °C |
 | The foam holds heat (box starts at room temperature) | The box gives up about 6 kJ as it cools, mostly in the first 15 min: as much as melting 19 g of ice | 169 s | −20.71 °C |
 | The drink's heat spreads through the bath at a finite rate (8 rings, convection factor 20) | Still brine conducts 0.54 W/(m K); the ice and convection through the ice bed raise that 20–60 times, but not to infinity | 209 s | −19.79 °C |
-| **All of these (`inputs.toml`)** | | **202 s** | **−20.42 °C** |
+| The tank stands on the foam floor, and gaps let heat past the foam | Glass touching foam has no air gap to slow the heat; the lid seam, the lid's thin lip and the holes for probe leads leak too. Leak 0.32 → 0.34 W/K in `inputs.toml` | 178 s | −20.10 °C |
+| **All of these (`inputs.toml`)** | | **202 s** | **−20.40 °C** |
 
 Also new:
 - stirrer heat (`stirrer.power`);
 - a measured-U override;
 - a box start temperature, for runs back to back;
 - a floating can (`can.held_down = false`);
-- free convection on the brine side as well (`outside_power_law`).
+- free convection on the brine side as well (`outside_power_law`);
+- a measured box leak (`box.measured_UA`), and the box test to measure it.
 
 Every rig and material number is now in `inputs.toml`, including the Bodnar
 coefficients and the solubility line.
@@ -269,6 +320,9 @@ coefficients and the solubility line.
   inf in its box for a perfectly mixed bath. `heat_spreading.rings`: how finely the bath
   is split.
 - `can.held_down`: the can held at its base height, or floating.
+- `box.tank_on_floor`: the tank standing on the foam floor (default), or lifted on
+  spacers with an air gap under it. `box.gaps_leak`: heat that gets past the foam.
+  `box.measured_UA`: a measured leak, which replaces the worked-out one.
 
 ### What the model still leaves out
 

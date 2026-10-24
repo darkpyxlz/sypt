@@ -179,7 +179,8 @@ class TankView:
                                        boxstyle='round,pad=0,rounding_size=0.5',
                                        facecolor=colour(s.T_drink), edgecolor='none', zorder=4.1))
         frozen = f"\n{100 * s.drink_frozen:.0f} % frozen" if s.drink_frozen > 0 else ''
-        waiting = '' if s.drink_in else f"\nin at {mmss(ex.p.drink.goes_in_at)}"
+        t_in = ex.p.drink.goes_in_at
+        waiting = '' if s.drink_in else f"\nin at {mmss(t_in)}" if t_in < float('inf') else "\nnot in this run"
         self._label(x_mid, y0 + self.can_h / 2, f"drink\n{s.T_drink:.1f} °C{frozen}{waiting}",
                     ha='center', va='center', color=ICE, bbox=boxed)
 
@@ -193,8 +194,9 @@ class TankView:
                     ha='right', va='top')
         self._label(-gl - self.gap - self.foam / 2, H / 2, f"styrofoam, middle {s.T_foam:.0f} °C",
                     rotation=90, ha='center', va='center', fontsize=7, color='#8A7A4A')
-        t_drink = s.t - ex.p.drink.goes_in_at
-        status = f"drink in for {mmss(t_drink)}" if s.drink_in else f"drink goes in in {mmss(-t_drink)}"
+        t_drink = s.t - t_in
+        status = (f"drink in for {mmss(t_drink)}" if s.drink_in else f"drink goes in in {mmss(-t_drink)}"
+                  if t_in < float('inf') else "no drink in this run")
         self._label(-gl - self.gap - self.foam, H + gl + self.gap + self.foam + 4.5,
                     f"t = {mmss(s.t)}   ({status})", fontsize=9, va='top', color=ICE)
 
@@ -224,13 +226,16 @@ class TimeGraphs:
             self.twin.remove()
             self.twin = None
         self.cursors = []
+        drink_line = t_in <= t[-1]
         for name, a in self.axes.items():
-            a.axvline(t_in, color='grey', ls='--', lw=0.8)
+            if drink_line:
+                a.axvline(t_in, color='grey', ls='--', lw=0.8)
             a.grid(alpha=0.3)
             self.cursors.append(a.axvline(t[0], color=ICE, lw=1.0, alpha=0.6))
             getattr(self, '_' + name)(a, p, t)
         first = next(iter(self.axes.values()))
-        first.text(t_in, 1.02, ' drink in', transform=first.get_xaxis_transform(), fontsize=7.5, color='grey')
+        if drink_line:
+            first.text(t_in, 1.02, ' drink in', transform=first.get_xaxis_transform(), fontsize=7.5, color='grey')
         list(self.axes.values())[-1].set_xlabel('time (min)')
         for a in list(self.axes.values())[:-1]:
             a.tick_params(labelbottom=False)
@@ -247,8 +252,10 @@ class TimeGraphs:
         a.plot(t, self.series('T_brine'), color=BRINE, label='brine (bulk)')
         a.plot(t, [s.T_near if s.drink_in else float('nan') for s in self.history], color=NEAR, lw=1.2,
                label='brine next to the can')
-        a.plot(t, self.series('T_surface'), color=BRINE, ls=':', label='ice surface')
-        a.plot(t, self.series('T_ice'), color=ICE, lw=0.9, label='ice (inside)')
+        a.plot(t, [s.T_surface if s.ice > 0 else float('nan') for s in self.history], color=BRINE, ls=':',
+               label='ice surface')
+        a.plot(t, [s.T_ice if s.ice > 0 else float('nan') for s in self.history], color=ICE, lw=0.9,
+               label='ice (inside)')
         a.plot(t, self.series('T_tank'), color=TANK, lw=0.9, label='tank glass')
         a.axhline(p.simulation.target_temperature, color='grey', ls=':', lw=1)
         a.axhline(p.phase_diagram.eutectic_temperature, color=BRINE, ls='-', lw=0.4, alpha=0.6)
@@ -278,7 +285,8 @@ class TimeGraphs:
         a.plot(t, self.series('Q_ice'), color=BRINE, label='brine → ice (melting)')
         a.plot(t, self.series('Q_spread'), color=NEAR, lw=1.2, label='from the can outwards')
         a.plot(t, self.series('Q_tank'), color=TANK, label='glass → brine')
-        a.plot(t, [s.Q_room_walls + s.Q_room_lid for s in self.history], color=ROOM, ls=':', label='room → box')
+        a.plot(t, [s.Q_room_walls + s.Q_room_lid + s.Q_gaps for s in self.history], color=ROOM, ls=':',
+               label='room → box')
         a.set_ylabel('heat flow (W)')
         a.legend(fontsize=7, loc='upper right')
 
@@ -300,7 +308,7 @@ def dashboard(result, experiment, t_show=None):
     p = result.inputs
     if t_show is None:
         t5 = result.time_to_target()
-        t_show = p.drink.goes_in_at + (t5 if t5 is not None else 180.0)
+        t_show = min(p.drink.goes_in_at + (t5 if t5 is not None else 180.0), p.simulation.end_time)
     fig = plt.figure(figsize=(14, 8.5))
     gs = fig.add_gridspec(4, 2, width_ratios=(1.05, 1), height_ratios=(1, 1, 1, 1.1),
                           left=0.03, right=0.94, top=0.93, bottom=0.07, wspace=0.18, hspace=0.12)

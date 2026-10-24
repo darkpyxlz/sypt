@@ -4,6 +4,7 @@ test_b8.py -- checks on b8_model.py.  Run:  python3 test_b8.py
 Each check prints one line; the script stops at the first failure.
 """
 
+import math
 import tempfile
 from pathlib import Path
 
@@ -53,7 +54,9 @@ for name, changes in {
         'floating can': [('can', 'held_down', False)],
         'brine-side power law, measured U off': [('can_heat_transfer', 'outside_power_law', True)],
         'measured U': [('can_heat_transfer', 'measured_U', 160.0)],
-        'box pre-cooled, no foam heat': [('box', 'start_temperature', -10.0), ('box', 'foam_density', 0.0)]}.items():
+        'box pre-cooled, no foam heat': [('box', 'start_temperature', -10.0), ('box', 'foam_density', 0.0)],
+        'leaky box: gaps and a measured leak': [('box', 'gaps_leak', 0.2), ('box', 'measured_UA', 0.6)],
+        'tank lifted on spacers': [('box', 'tank_on_floor', False)]}.items():
     p = base.copy()
     for section, key, value in changes:
         setattr(p.sections[section], key, value)
@@ -120,7 +123,29 @@ fine.heat_spreading.rings = 32
 t8, t32 = r_def.time_to_target(), run(fine).time_to_target()
 check('8 rings are within 5 % of 32 rings', abs(t8 - t32) < 0.05 * t32, f"({t8:.1f} s against {t32:.1f} s)")
 
-# --- 5. Phase diagram -----------------------------------------------------------
+# --- 5. The box is not a perfect insulator ----------------------------------------
+e_def, e_lifted = Experiment(base), Experiment(variants['tank lifted on spacers'])
+e_leaky = Experiment(variants['leaky box: gaps and a measured leak'])
+check('the tank standing on the foam leaks more than one on spacers', e_def.UA_walls > e_lifted.UA_walls,
+      f"({e_def.UA_walls:.4f} against {e_lifted.UA_walls:.4f} W/K)")
+check('a measured box leak replaces the worked-out one', abs(e_leaky.box_UA - 0.6) < 1e-12)
+check('a leakier box warms the bath', results['leaky box: gaps and a measured leak'].history[-1].T_brine
+      > r_def.history[-1].T_brine + 0.2)
+s_def = r_def.summary()
+check('the room heat and the drink heat are both counted', abs(s_def['heat_from_room'] + base.stirrer.power
+      * base.simulation.end_time - r_def.energy_in) < 1e-6 and s_def['heat_from_drink'] > 0,
+      f"({s_def['heat_from_room'] / 1000:.1f} kJ from the room, {s_def['heat_from_drink'] / 1000:.1f} kJ from the drink)")
+box_inputs = load_inputs(HERE / 'box_test.toml')
+ex_box, r_box = Experiment(box_inputs), run(box_inputs)
+C_box = box_inputs.water.mass * ex_box.brine_cp(0.0) + ex_box.tank_C
+T_room, a, b = box_inputs.room.temperature, r_box.at(1800).T_brine, r_box.at(10800).T_brine
+fitted = C_box * math.log((T_room - a) / (T_room - b)) / 9000
+check('box test: energy conserved, and no drink', abs(r_box.energy_error) < 1e-3
+      and r_box.summary_lines()[0].startswith('no drink'))
+check('box test: a log fit of the water temperature gives back the leak', abs(fitted - ex_box.box_UA) < 0.03 * ex_box.box_UA,
+      f"({fitted:.3f} against {ex_box.box_UA:.3f} W/K)")
+
+# --- 6. Phase diagram -----------------------------------------------------------
 ex = Experiment(base)
 worst = max(abs(ex.freezing_point(ex.bodnar_w(x)) + x) for x in [0.5 * i for i in range(1, 42)])
 check('freezing_point() inverts Bodnar', worst < 1e-9, f"(worst {worst:.1e} K)")
@@ -128,7 +153,7 @@ gap = abs(ex.halite_saturation_w(base.phase_diagram.peritectic_temperature) - ba
 check('halite line meets the peritectic', gap < 1e-4, f"(gap {gap:.1e})")
 check('no salt: the bath stays at or above 0 C', min(results['no salt'].series('T_brine')) > -1e-6)
 
-# --- 6. The drink freezing --------------------------------------------------------
+# --- 7. The drink freezing --------------------------------------------------------
 d = base.drink
 frozen = [s for s in results['inputs.toml'].history if s.drink_frozen > 0]
 check('drink freezes once below its freezing point', len(frozen) > 0)
@@ -141,7 +166,7 @@ check('supercooled drink stays liquid, then warms when ice appears',
       coldest_liquid < d.freezing_point - 5.9 and first_ice.T_drink > coldest_liquid + 3,
       f"(liquid down to {coldest_liquid:.1f} C, {first_ice.T_drink:.1f} C once ice appears)")
 
-# --- 7. Inputs files --------------------------------------------------------------
+# --- 8. Inputs files --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
     short = Path(tmp) / 'short.toml'
     short.write_text('[bath_typo]\nmass = 1\n')

@@ -38,6 +38,14 @@ foam_density = 20.0           # kg/m^3     MEASURE     weigh the box and divide 
                               #                        EPS is 15-30.  0 = the foam holds no heat
 foam_heat_capacity = 1300.0   # J/(kg K)   LITERATURE  expanded polystyrene
 start_temperature = 28.0      # degC       CHOICE      room temperature, unless the box was used just before
+tank_on_floor = true          # -          MODEL       true: the tank stands on the foam floor, glass touching
+                              #                        foam (no air gap under it).  false: lifted on spacers
+gaps_leak = 0.02              # W/K        ASSUMED     heat that gets past the foam altogether, room -> brine:
+                              #                        the lid seam (~0.01 for a 1 mm gap, ~0.05 for 5 mm),
+                              #                        the thin lip of the lid (~0.01), holes for probe leads
+measured_UA = 0.0             # W/K        MEASURE     the box's whole steady leak, from the box test in
+                              #                        README.md (box_test.toml).  Above 0 it replaces the
+                              #                        computed leak: every path is scaled to add up to it
 
 
 [tank]                        # glass tank, inside dimensions

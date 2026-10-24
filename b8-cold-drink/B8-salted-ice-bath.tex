@@ -78,7 +78,9 @@ charge specified in the rig note does not reach the eutectic}, so it has no ther
 §\ref{sec:spread} describes the time-dependent model behind the interactive simulator
 (\code{b8\_model.py}), in which ice melts and salt dissolves at finite rates and the drink's heat
 spreads through the bath no faster than the brine carries it: \textbf{that spreading alone
-lengthens the time to 5\,°C from 169 to 202\,s.}
+lengthens the time to 5\,°C from 169.5 to 202\,s.} It also counts, path by path, the heat that
+leaks in through the styrofoam box, which is not a perfect insulator, and gives a test to
+measure that leak.
 
 % ---------------------------------------------------------------- 1
 \section{Status of the work}
@@ -101,6 +103,8 @@ scales with it. The heat capacities and dissolution enthalpy are textbook placeh
 shows the \FLOOR\ results move by at most 0.3\,K when they are varied over a plausible range.
 The convection factor that sets how fast the drink's heat spreads through the bath
 (§\ref{sec:spread}) is an estimate; over 5–100 it moves the time to 5\,°C from 242 to 180\,s.
+So is the box's leak, worked out as 0.34\,W\,K$^{-1}$ (§\ref{sec:box}); it barely moves the drink,
+but it sets how fast the bath warms, and the box test measures it.
 
 \textbf{Not attempted.} Stratification of the bath (§\ref{sec:spread} resolves it around the
 can, not in height); the metastable eutectic and hydrohalite nucleation; freezing or
@@ -515,6 +519,8 @@ Controls: starting temperatures of all three components, recorded.
 \paragraph{E2 · Blank run} Unbuffered charge, lid on, no drink, one hour. Fit
 $\dot T_b$ over the first ten minutes; invert with $L_{\text{eff}}$ from \code{L\_eff()}.
 Predicted 0.62\,K\,h$^{-1}$ for 0.46\,W\,K$^{-1}$ with the stirrer off; the stirrer's power adds to the leak, so measure it once with the stirrer off as well. DV: $(UA)_{\text{box}}$.
+A simpler measurement of the same number, with no phase change to invert, is the box test of
+§\ref{sec:box}: cold water only, three hours.
 
 \paragraph{E3 · Drink runs} Can~2 from room temperature in the buffered and unbuffered charges.
 DV: $T_d(t)$, $T_b(t)$. Fit both Newton and the $\Delta T^{1/4}$ law to each run, compare
@@ -545,7 +551,7 @@ at least a few centimetres from the can, a single $T_b$ is the right first model
 not, \eqref{eq:drink} should be driven by the measured wall temperature (COMSOL M2).
 §\ref{sec:spread} lifts the approximation around the can: with the brine conducting and
 convecting at a finite rate, the brine by the can runs about 6\,K above the bulk and the time to
-5\,°C rises from 169 to 202\,s.
+5\,°C rises from 169.5 to 202\,s.
 
 \subsection{The drink as a lump}
 The drink's own Biot number is 8–17 (equation bank), so it is not a lump by conduction;
@@ -610,9 +616,10 @@ remains. The drink can freeze, gradually, as its sugar concentrates; the can is 
 series, $1/U = 1/h_i + 1/h_o$ with $h_i \propto \Delta T^{1/4}$, or a measured $U$. The foam and the
 glass hold heat, and the air films on the box are counted. $c_b(w)$, $\rho_b(w)$ and the brine
 conductivity $k_b(w) = 0.5725 - 0.149\,w$\,W\,m$^{-1}$K$^{-1}$ are fits to Melinder (2010), and
-$c_i(T)$ follows IAPWS R10-06. Energy is conserved to $10^{-9}$\,J of the 40.1\,kJ let in over
-a 50-minute run, and every run prints the check. With the bath perfectly mixed this model gives
-169\,s to 5\,°C, the same as the table of §8.
+$c_i(T)$ follows IAPWS R10-06. Heat leaks in from the room through the box (§\ref{sec:box}):
+43.2\,kJ over a 50-minute run, against 141.2\,kJ from the drink. The energy bookkeeping closes to
+$10^{-9}$\,J, and every run prints it. With the bath perfectly mixed this model gives 169.5\,s to
+5\,°C, against 169\,s in the table of §8.
 
 \subsection{Why the heat cannot reach the whole bath at once}
 When Can~2 goes in, 257\,W leaves it in the first second ($T_d = 27.8\dC$ against brine at
@@ -693,9 +700,9 @@ inputs. \code{python3 b8\_simple.py -{}-report-figure} redraws it.}
 \label{fig:spread}
 \end{figure}
 
-With the defaults the drink reaches 5\,°C in \textbf{202\,s instead of 169\,s}. The inner ring
+With the defaults the drink reaches 5\,°C in \textbf{202\,s instead of 169.5\,s}. The inner ring
 warms 6\,K above the rest within a minute and peaks at $-14.1\dC$, while the bulk barely moves
-($-20.42$ to $-20.40\dC$); the ice next to the can goes first (Fig.~\ref{fig:spread}c: a quarter
+($-20.40$ to $-20.38\dC$); the ice next to the can goes first (Fig.~\ref{fig:spread}c: a quarter
 of it in 10 minutes, against 4\,\% at the walls). Even before the drink, the bath is not uniform:
 the glass warms the outer ring, so the brine there is 0.3\,K warmer than in a perfectly mixed bath.
 
@@ -704,11 +711,11 @@ the glass warms the outer ring, so the brine there is 0.3\,K warmer than in a pe
 \toprule
 $f$ & \multicolumn{2}{c}{time to 5\,°C} & brine by the can, peak & bath at drink-in \\
  & 8 rings & 50 rings & 8 rings & 8 rings \\ \midrule
-$\infty$ (perfectly mixed) & 169\,s & 169\,s & $-19.6\dC$ & $-20.71\dC$ \\
-100 (stirred) & 180\,s & 181\,s & $-17.9\dC$ & $-20.64\dC$ \\
-\textbf{20 (default)} & \textbf{202\,s} & \textbf{209\,s} & $\mathbf{-14.1\dC}$ & $\mathbf{-20.42\dC}$ \\
-5 & 242\,s & 266\,s & $-9.4\dC$ & $-19.97\dC$ \\
-1 (still brine) & 318\,s & 424\,s & $-3.5\dC$ & $-19.39\dC$ \\
+$\infty$ (perfectly mixed) & 169.5\,s & 169.5\,s & $-19.6\dC$ & $-20.70\dC$ \\
+100 (stirred) & 180\,s & 181\,s & $-17.8\dC$ & $-20.63\dC$ \\
+\textbf{20 (default)} & \textbf{202\,s} & \textbf{209\,s} & $\mathbf{-14.1\dC}$ & $\mathbf{-20.40\dC}$ \\
+5 & 242\,s & 266\,s & $-9.4\dC$ & $-19.94\dC$ \\
+1 (still brine) & 318\,s & 424\,s & $-3.5\dC$ & $-19.34\dC$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -732,14 +739,54 @@ stratification of §9 is not in it. Convection is a fixed multiple of $k_b$, not
 the temperatures it carries. And the rectangular tank is taken as a cylinder of the same floor
 area.
 
+\subsection{The box is not a perfect insulator}
+\label{sec:box}
+The room is 48\,K warmer than the bath, so heat leaks in through the styrofoam the whole time.
+The model counts four paths from the room, each starting with the room's air film on the foam
+($h = 9$\,W\,m$^{-2}$K$^{-1}$, convection and radiation):
+\begin{center}\small
+\begin{tabular}{@{}l r@{}}
+\toprule
+Path & Leak \\ \midrule
+foam walls $\to$ air gap $\to$ tank glass $\to$ brine & 0.20\,W\,K$^{-1}$ \\
+foam floor $\to$ tank glass $\to$ brine (the tank stands on the foam: no air gap) & 0.07\,W\,K$^{-1}$ \\
+foam lid $\to$ still air $\to$ brine & 0.05\,W\,K$^{-1}$ \\
+gaps $\to$ brine: lid seam, the lid's thin lip, holes for probe leads & 0.02\,W\,K$^{-1}$ \\ \midrule
+all of them & 0.34\,W\,K$^{-1}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The foam conducts 0.035\,W\,m$^{-1}$K$^{-1}$ through 30\,mm and holds 280\,J\,K$^{-1}$, so a box that starts
+at room temperature gives up about 6\,kJ as it cools. The gaps are an estimate: buoyancy-driven
+exchange through a 1\,mm seam round the lid carries about 0.01\,W\,K$^{-1}$, a 5\,mm one about 0.05.
+The \code{b8\_sim.py} figure of 0.46\,W\,K$^{-1}$ (§8) left out the air films.
+
+Next to the can's 5.3\,W\,K$^{-1}$ the leak is small: a box leaking anything from 0.25 to
+1.0\,W\,K$^{-1}$ gives 202 to 203\,s to 5\,°C. It shows in the bath instead: by the end of the
+50-minute run the default bath is at $-19.2\dC$ with 2.08\,kg of ice left, against $-17.5\dC$ and
+1.91\,kg at 1.0\,W\,K$^{-1}$. A real box leaks more than the sum says (thin spots, seams, damp or
+light foam), so it should be measured. \textbf{The box test}: 5\,kg of cold water from the fridge
+in the tank, no ice or salt, the lid on with the probe leads through their usual gaps, logged for
+3\,h and stirred before each reading. After the first 30\,min, while the room-temperature glass
+warms the water, the water approaches the room exponentially:
+\begin{equation}
+(UA)_{\text{box}} = \frac{C}{t_2 - t_1}\,\ln\frac{T_{\text{room}} - T(t_1)}{T_{\text{room}} - T(t_2)},
+\qquad C = m_w c_w + C_{\text{glass}} = m_w \times 4190 + 2020\ \text{J\,K}^{-1}.
+\label{eq:boxtest}
+\end{equation}
+The model predicts 6.7\,°C at 30\,min and 9.4\,°C at 3\,h, and \eqref{eq:boxtest} applied to its own
+curve gives back its leak to 1\,\%. \code{box\_test.toml} sets this run up in the simulator; a
+measured value goes into \code{[box] measured\_UA}, which scales every path to add up to it.
+
 \subsection{Inputs and the simulator}
 Every number the simulator uses is in \code{inputs.toml}, with its unit and a tag saying where it
 comes from (measured, to measure, assumed, literature, choice, model switch); a short file with
 only the lines that change overrides it. \code{b8\_app.py} puts the main inputs on sliders with a
 live drawing of the tank, the brine drawn ring by ring so the warm layer by the can shows. Every
 slider has a box beside it: a number typed there and confirmed with Enter is used exactly, even
-outside the slider's range, which then widens to follow it. The convection factor has a slider
-of its own, and \code{inf} typed in its box gives the perfectly mixed bath. The web page
+outside the slider's range, which then widens to follow it. The convection factor and the box's
+measured leak have sliders of their own, and \code{inf} typed in the convection factor's box gives
+the perfectly mixed bath. The web page
 (\url{https://darkpyxlz.github.io/sypt/}) runs the same Python files unchanged in the browser
 (Pyodide), with the same sliders and boxes, every input of \code{inputs.toml} editable, and
 scenarios saved as \code{.toml} files or links. A run takes about 0.5\,s in Python and 1\,s in the

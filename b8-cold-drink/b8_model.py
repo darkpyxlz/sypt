@@ -40,8 +40,11 @@ share one salt content (salt mixes through the bath).
 
 Heat paths, in W, each positive in the direction of the arrow:
     room    -> foam          the foam stores heat too, so a warm box keeps
-    foam    -> tank glass    giving some up after the bath goes in (walls, base)
+    foam    -> tank glass    giving some up after the bath goes in (walls, base;
+                             the tank stands on the foam floor)
     foam    -> brine         through the air under the lid
+    room    -> brine         straight through the gaps: the lid seam, holes for
+                             probe leads (the box is not a perfect insulator)
     glass   -> brine         through the wetted glass
     drink   -> inner ring    through the can
     ring    -> next ring     conduction and convection through the bath, out to the walls
@@ -235,6 +238,9 @@ def check_inputs(p):
         raise ValueError("the can is too big for the tank")
     if p.heat_spreading.convection_factor <= 0:
         raise ValueError("[heat_spreading] convection_factor must be above 0 (inf = perfectly mixed)")
+    for key in ('gaps_leak', 'measured_UA'):
+        if not 0 <= getattr(p.box, key) < math.inf:
+            raise ValueError(f"[box] {key} must be 0 or more")
 
 
 def solve(f, lo, hi, tol=1e-12):
@@ -337,6 +343,7 @@ class Snapshot:
     Q_room_lid: float        # W, room -> foam lid
     Q_walls: float           # W, foam walls and base -> tank glass
     Q_lid: float             # W, foam lid -> brine
+    Q_gaps: float            # W, room -> brine through the gaps in the box
     Q_stir: float            # W, stirrer -> brine
     Q_ice: float             # W, brine -> ice surface, all rings
     Q_core: float            # W, ice interior -> ice surface, all rings
@@ -349,9 +356,10 @@ class Result:
     """A finished run: the history, plus the checks and headline numbers."""
     inputs: Inputs
     history: list            # one Snapshot per time step
-    energy_in: float         # J let in from the room (into the foam) and the stirrer
+    energy_in: float         # J let in from the room (into the foam and through the gaps) and the stirrer
     energy_error: float      # J the bookkeeping failed to account for (should be ~0)
     warnings: list = field(default_factory=list)
+    box_UA: float = math.nan  # W/K, the box's steady leak, room -> inside
 
     def series(self, name):
         """One quantity over the whole run, e.g. result.series('T_drink')."""
@@ -377,10 +385,14 @@ class Result:
         """Headline numbers of the run, as a dict."""
         t_in = self.inputs.drink.goes_in_at
         first, last = self.history[0], self.history[-1]
-        at_in = self.at(t_in)
+        drink_went_in = t_in <= last.t                  # [drink] goes_in_at = inf: no drink (the box test)
+        at_in = self.at(t_in) if drink_went_in else last
         after = [s for s in self.history if t_in <= s.t <= t_in + 300]
         return dict(
+            drink_went_in=drink_went_in,
             time_to_target=self.time_to_target(),
+            brine_at_start=first.T_brine,
+            brine_at_end=last.T_brine,
             brine_at_drink_in=at_in.T_brine,
             brine_peak_after_drink_in=max((s.T_brine for s in after), default=float('nan')),
             near_peak_after_drink_in=max((s.T_near for s in after), default=float('nan')),
@@ -394,6 +406,10 @@ class Result:
             highest_level=max(max(s.level, s.heap_top) for s in self.history),
             energy_error=self.energy_error,
             energy_in=self.energy_in,
+            heat_from_room=sum(s.Q_room_walls + s.Q_room_lid + s.Q_gaps for s in self.history[:-1])
+                           * self.inputs.simulation.time_step,
+            heat_from_drink=sum(s.Q_drink for s in self.history[:-1]) * self.inputs.simulation.time_step,
+            box_UA=self.box_UA,
         )
 
     def summary_lines(self):
@@ -401,27 +417,45 @@ class Result:
         s, p = self.summary(), self.inputs
         target = p.simulation.target_temperature
         t5 = s['time_to_target']
-        lines = [f"drink reaches {target:g} °C {t5:.0f} s ({mmss(t5)}) after it goes in" if t5 is not None
-                 else f"drink never reaches {target:g} °C"]
+        if not s['drink_went_in']:
+            lines = [f"no drink in this run: the bath goes from {s['brine_at_start']:.2f} °C "
+                     f"to {s['brine_at_end']:.2f} °C in {mmss(self.history[-1].t)}"]
+        elif t5 is not None:
+            lines = [f"drink reaches {target:g} °C {t5:.0f} s ({mmss(t5)}) after it goes in"]
+        else:
+            lines = [f"drink never reaches {target:g} °C"]
+        if s['drink_went_in']:
+            lines += [
+                f"bath when the drink goes in: {s['brine_at_drink_in']:.1f} °C "
+                f"(warms to {s['brine_peak_after_drink_in']:.1f} °C)",
+                f"brine next to the can: up to {s['near_peak_after_drink_in']:.1f} °C; ice there "
+                f"{1000 * s['near_ice_at_drink_in']:.0f} g -> {1000 * s['near_ice_at_end']:.0f} g",
+            ]
+        frozen_bath = p.ice.mass > 0 or p.salt.mass > 0              # not the box test's plain water
+        if frozen_bath:
+            lines.append(f"coldest bath: {s['coldest_brine']:.1f} °C   "
+                         f"(eutectic {p.phase_diagram.eutectic_temperature:g} °C)")
+        if s['drink_went_in']:
+            lines.append(f"drink at the end: {s['drink_at_end']:.1f} °C" +
+                         (f", {100 * s['drink_frozen_at_end']:.0f} % of its water frozen"
+                          if s['drink_frozen_at_end'] > 0 else ''))
+        if frozen_bath:
+            lines.append(f"ice melted {s['ice_melted']:.2f} kg, salt crystals left {1000 * s['salt_left']:.0f} g")
         lines += [
-            f"bath when the drink goes in: {s['brine_at_drink_in']:.1f} °C "
-            f"(warms to {s['brine_peak_after_drink_in']:.1f} °C)",
-            f"brine next to the can: up to {s['near_peak_after_drink_in']:.1f} °C; ice there "
-            f"{1000 * s['near_ice_at_drink_in']:.0f} g -> {1000 * s['near_ice_at_end']:.0f} g",
-            f"coldest bath: {s['coldest_brine']:.1f} °C   (eutectic {p.phase_diagram.eutectic_temperature:g} °C)",
-            f"drink at the end: {s['drink_at_end']:.1f} °C" +
-            (f", {100 * s['drink_frozen_at_end']:.0f} % of its water frozen" if s['drink_frozen_at_end'] > 0 else ''),
-            f"ice melted {s['ice_melted']:.2f} kg, salt crystals left {1000 * s['salt_left']:.0f} g",
-            f"energy check {s['energy_error']:+.1f} J of {s['energy_in']:.0f} J let in (should be ~0)",
+            "heat taken in: " + (f"{s['heat_from_drink'] / 1000:.1f} kJ from the drink, " if s['drink_went_in'] else '')
+            + f"{s['heat_from_room'] / 1000:.1f} kJ from the room through the box (leak {s['box_UA']:.2f} W/K)",
+            f"energy bookkeeping: {s['energy_error']:+.1f} J unaccounted for (should be ~0)",
         ]
         return lines + [f"warning: {w}" for w in self.warnings]
 
 
 def mmss(t):
     """Seconds as m:ss."""
+    if not math.isfinite(t):
+        return 'never'
     sign = '-' if t < 0 else ''
-    t = abs(t)
-    return f"{sign}{int(t // 60)}:{int(t % 60):02d}"
+    t = round(abs(t))
+    return f"{sign}{t // 60}:{t % 60:02d}"
 
 
 # =============================================================================
@@ -436,8 +470,9 @@ class Experiment:
 
         # --- numbers worked out once from the inputs -------------------------
         self.floor_area = p.tank.width * p.tank.length
-        self.box = self.box_paths()
+        self.box, self.UA_gaps = self.box_paths()
         self.UA_walls, self.UA_lid = self.box['walls'].UA, self.box['lid'].UA
+        self.box_UA = self.UA_walls + self.UA_lid + self.UA_gaps
         self.tank_C = self.tank_heat_capacity()
         self.glass_U = self.glass_film_U()
         self.drink_C = p.drink.mass * p.drink.heat_capacity + p.can.mass * p.can.heat_capacity
@@ -541,25 +576,40 @@ class Experiment:
     # 3c. The box and the tank
     # =========================================================================
     def box_paths(self):
-        """The two ways heat gets through the styrofoam: 'walls' (walls and base, into
-        the tank glass) and 'lid' (through the air above the bath, into the brine).
+        """How heat gets through the box: ({'walls': ..., 'lid': ...}, UA of the gaps).
 
-        Each path is the room air film, then the foam, then the air gap inside.  The
-        foam's heat capacity sits at its middle: G_out links it to the room, G_in to
-        the inside, and C (J/K) is how much heat it holds per kelvin.  UA is the
-        steady leak, W/K.  Areas are taken at the middle of the foam."""
+        'walls' (walls and base, into the tank glass) and 'lid' (through the air above
+        the bath, into the brine) go through the styrofoam.  Each is the room air film,
+        then the foam, then the air gap inside; where the tank stands on the foam floor
+        the glass touches the foam, with no air gap.  The foam's heat capacity sits at
+        its middle: G_out links it to the room, G_in to the inside, and C (J/K) is how
+        much heat it holds per kelvin.  UA is the steady leak, W/K.  Areas are taken at
+        the middle of the foam.
+
+        The gaps (the lid seam, holes for probe leads) let heat past the foam straight
+        into the brine.  A measured leak, [box] measured_UA, scales every path so that
+        they add up to it."""
         b, tank = self.p.box, self.p.tank
         gap = 2 * b.clearance + b.wall_thickness             # tank wall -> middle of foam, both sides
-        x, y, z = tank.width + gap, tank.length + gap, tank.height + gap
+        below = b.clearance if not b.tank_on_floor else 0.0
+        x, y = tank.width + gap, tank.length + gap
+        z = tank.height + b.clearance + below + b.wall_thickness
         half_foam = b.wall_thickness / 2 / b.foam_conductivity        # m^2 K/W
-        paths = {}
-        for name, area, inside_h in (('walls', x * y + 2 * (x * z + y * z), b.side_gap_h),
-                                     ('lid', x * y, b.lid_gap_h)):
-            G_out = area / (1 / b.outside_air_h + half_foam)
-            G_in = area / (half_foam + 1 / inside_h)
+        floor, sides = x * y, 2 * (x * z + y * z)
+        base_inside = 0.0 if b.tank_on_floor else 1 / b.side_gap_h    # glass on foam: no gap
+        inside = {'walls': sides / (half_foam + 1 / b.side_gap_h) + floor / (half_foam + base_inside),
+                  'lid': floor / (half_foam + 1 / b.lid_gap_h)}
+        paths, UA_gaps = {}, b.gaps_leak
+        for name, area in (('walls', floor + sides), ('lid', floor)):
+            G_out, G_in = area / (1 / b.outside_air_h + half_foam), inside[name]
             paths[name] = FoamPath(G_out, G_in, 1 / (1 / G_out + 1 / G_in),
-                                b.foam_density * b.foam_heat_capacity * area * b.wall_thickness)
-        return paths
+                                   b.foam_density * b.foam_heat_capacity * area * b.wall_thickness)
+        if b.measured_UA > 0:
+            scale = b.measured_UA / (sum(path.UA for path in paths.values()) + UA_gaps)
+            paths = {name: FoamPath(scale * path.G_out, scale * path.G_in, scale * path.UA, path.C)
+                     for name, path in paths.items()}
+            UA_gaps *= scale
+        return paths, UA_gaps
 
     def foam_flows(self, s, T_brine):
         """Heat flows through the foam, W: (room -> walls, walls -> glass, room -> lid, lid -> brine),
@@ -857,7 +907,7 @@ class Experiment:
             Q_drink=Q_drink, Q_spread=Q_spread,
             Q_tank=self.glass_U * self.wetted_glass_area(level) * (s.T_tank - T_b),
             Q_room_walls=Q_room_walls, Q_room_lid=Q_room_lid, Q_walls=Q_walls, Q_lid=Q_lid,
-            Q_stir=p.stirrer.power,
+            Q_gaps=self.UA_gaps * (p.room.temperature - T_b), Q_stir=p.stirrer.power,
             Q_ice=sum(Q_ice_rings), Q_core=sum(Q_core_rings),
             Q_ice_rings=Q_ice_rings, Q_core_rings=Q_core_rings,
         )
@@ -908,7 +958,7 @@ class Experiment:
             # 4. Brine: the innermost ring gains the drink's heat; the outermost gains glass,
             #    lid and stirrer heat.  Each loses heat to its own ice and to dissolving,
             #    and gains its own meltwater.
-            gains = (f.Q_drink if i == 0 else 0.0) + (f.Q_tank + f.Q_lid + f.Q_stir if i == last else 0.0)
+            gains = (f.Q_drink if i == 0 else 0.0) + (f.Q_tank + f.Q_lid + f.Q_gaps + f.Q_stir if i == last else 0.0)
             H_rings.append(s.H_rings[i] + gains * dt - to_ice + melt * h_melt - dissolving[i] * dh)
         water = s.water + sum(melts)
 
@@ -1001,7 +1051,7 @@ class Experiment:
         E0, E_in, overflowed = self.total_heat(state), 0.0, False
         n_steps = round(p.simulation.end_time / dt)
         for _ in range(n_steps):
-            E_in += (snap.Q_room_walls + snap.Q_room_lid + snap.Q_stir) * dt
+            E_in += (snap.Q_room_walls + snap.Q_room_lid + snap.Q_gaps + snap.Q_stir) * dt
             state = self.step(state, snap, dt)
             snap = self.describe(state)
             history.append(snap)
@@ -1011,7 +1061,7 @@ class Experiment:
                 overflowed = True
 
         error = self.total_heat(state) - E0 - E_in
-        return Result(p, history, E_in, error, warnings)
+        return Result(p, history, E_in, error, warnings, self.box_UA)
 
 
 def run(path=None):
