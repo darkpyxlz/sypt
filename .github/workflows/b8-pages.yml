@@ -1,13 +1,15 @@
 name: B8 web simulator
 
-# Publishes b8-cold-drink/ (with the simulator in web/) to the gh-pages branch.
-# GitHub Pages must be switched on once: Settings -> Pages -> Deploy from a
-# branch -> gh-pages, / (root).  The site is then at https://<owner>.github.io/<repo>/
+# Keeps the gh-pages branch an exact copy of main (minus .github), after the
+# model's checks pass.  GitHub Pages can serve either branch: Settings -> Pages
+# -> Deploy from a branch -> main or gh-pages, / (root).  Both have index.html
+# at the top, which opens the simulator in b8-cold-drink/web/.  Choosing
+# gh-pages means only a version that passed the checks goes live.
 
 on:
   push:
     branches: [main]
-    paths: ['b8-cold-drink/**', '.github/workflows/b8-pages.yml']
+    paths: ['b8-cold-drink/**', 'index.html', '.nojekyll', '.github/workflows/b8-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -28,15 +30,11 @@ jobs:
       - name: Check the model before publishing (pure Python, no packages)
         working-directory: b8-cold-drink
         run: python3 test_b8.py
-      - name: Assemble the site
+      - name: Assemble the site (the repository as it is on main)
         run: |
           mkdir _site
-          cp -r b8-cold-drink/. _site/
-          rm -rf _site/__pycache__ _site/web/__pycache__
-          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>B8 Cold Drink Simulator</title>' \
-            '<meta http-equiv="refresh" content="0; url=web/"><a href="web/">B8 cold drink simulator</a>' \
-            > _site/index.html
-          touch _site/.nojekyll
+          git archive --format=tar HEAD | tar -x -C _site
+          rm -rf _site/.github
       - name: Push to the gh-pages branch
         working-directory: _site
         run: |

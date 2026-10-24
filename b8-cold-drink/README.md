@@ -5,8 +5,7 @@ How cold can the bath get, and how fast does the drink cool?
 
 In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam box.
 
-**Try it in a browser:** https://darkpyxlz.github.io/sypt/ (see *The web simulator* below
-for what has to be switched on first).
+**Try it in a browser:** https://darkpyxlz.github.io/sypt/
 
 | File | What it is |
 |---|---|
@@ -72,12 +71,15 @@ change to the web page too, with nothing to port. A run takes about 0.4 s.
 - **Load .toml / Download .toml**: the same files `b8_simple.py --inputs` reads.
   **Copy link** puts your changes in the address, so you can send a scenario to someone.
 
-**Publishing.** `.github/workflows/b8-pages.yml` runs the checks on every push to `main`
-that touches this folder. It then copies the folder to the `gh-pages` branch. GitHub Pages
-has to be switched on once, under *Settings → Pages → Build and deployment → Deploy from a
-branch → `gh-pages`, `/ (root)`*. On a free GitHub plan, Pages needs the repository to be
-public. With GitHub Pro it also works for a private repository, but the site itself is
-public either way.
+**Publishing.** GitHub Pages serves the site at https://darkpyxlz.github.io/sypt/. The
+repository has an `index.html` and a `.nojekyll` at the top level. The `index.html` forwards
+to `b8-cold-drink/web/`. The `.nojekyll` makes GitHub serve the files as they are, so it does
+not turn the README into a web page. Pages can serve either branch (*Settings → Pages →
+Deploy from a branch*):
+
+- `main`, `/ (root)`: every push to `main` goes live straight away.
+- `gh-pages`, `/ (root)`: `.github/workflows/b8-pages.yml` copies `main` there only after
+  `test_b8.py` passes, so a broken model never goes live.
 
 ## Putting in your measurements
 
