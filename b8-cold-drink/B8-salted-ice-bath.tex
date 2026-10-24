@@ -653,10 +653,12 @@ holds the share $\phi_j = (r_{j+1}^2 - r_j^2)/(R^2 - r_c^2)$ of the brine, the i
 crystals, and has its own brine temperature $T_j$, ice and ice-interior temperature, and crystals.
 The salt fraction $w$ is the same in every ring: the brine that carries the heat also mixes the
 salt, so each step the meltwater is shared out again and carries its heat with it. The drink
-heats only the inner ring; the glass, the lid and the stirrer heat only the outer one:
+heats only the inner ring; the glass, the lid, the gaps in the box (§\ref{sec:box}) and the stirrer
+heat only the outer one:
 \begin{align}
-C_j\,\dot T_j &= G\,(T_{j-1} - T_j) + G\,(T_{j+1} - T_j) - Q_{i,j} - \Delta h_s\,\dot s_j
-  + \delta_{j0}\,UA\,(T_d - T_0) + \delta_{j,N-1}\,(Q_{\text{glass}} + Q_{\text{lid}} + P_{\text{stir}}),
+C_j\,\dot T_j &= G\,(T_{j-1} - T_j) + G\,(T_{j+1} - T_j) - Q_{i,j} - \Delta h_s\,\dot s_j \notag\\
+  &\quad + \delta_{j0}\,UA\,(T_d - T_0)
+  + \delta_{j,N-1}\,(Q_{\text{glass}} + Q_{\text{lid}} + Q_{\text{gaps}} + P_{\text{stir}}),
   \label{eq:ring}\\
 G &= \frac{2\pi\,k_{\text{eff}}\,h}{\ln(r_{j+1}/r_j)} = \frac{2\pi N k_{\text{eff}}\,h}{\ln(R/r_c)},
   \qquad k_{\text{eff}} = f\,k_b(w),
