@@ -1,0 +1,160 @@
+# =============================================================================
+# B8 Cold drink -- every number the simulation uses.
+#
+# Change numbers here, not in the code.  b8_simple.py and b8_app.py read this
+# file.  To keep a different set (one run, one rig), copy the file, or write a
+# short file with only the lines that change, and run
+#     python3 b8_simple.py --inputs my_run.toml
+# Anything a short file leaves out is taken from this one.
+#
+# Units: kg, m, s, W, J.  Temperatures in degC.
+# The tag after each value says where the number comes from:
+#   MEASURED    measured on the rig (the note says when)
+#   MEASURE     a placeholder: measure it and put the real number in
+#   RIG NOTE    taken from the 20 Oct rig note; check it on the rig
+#   CHECK       no record of where it came from; check it
+#   ASSUMED     an estimate; fitting a real run would pin it down
+#   LITERATURE  handbook or paper value; leave it unless you have a reason
+#   CHOICE      you choose it when you set up a run
+#   MODEL       switches a piece of physics on or off (see README.md)
+# =============================================================================
+
+
+[room]
+temperature = 28.0            # degC       RIG NOTE    air next to the box
+
+
+[box]                         # the styrofoam box the tank sits in
+wall_thickness = 0.030        # m          RIG NOTE    foam walls, base and lid
+clearance = 0.010             # m          CHECK       air gap between tank glass and foam, each side
+foam_conductivity = 0.035     # W/(m K)    ASSUMED     expanded polystyrene, 0.033-0.038 typical
+outside_air_h = 9.0           # W/(m^2 K)  ASSUMED     still room air on the outside of the foam:
+                              #                        convection ~5 + radiation ~4.  inf = leave out
+side_gap_h = 6.0              # W/(m^2 K)  ASSUMED     the air gap between foam and glass:
+                              #                        conduction ~2.5 + radiation ~3.5.  inf = leave out
+lid_gap_h = 4.0               # W/(m^2 K)  ASSUMED     the still air between brine and lid
+                              #                        (warm above cold, so no convection).  inf = leave out
+
+
+[tank]                        # glass tank, inside dimensions
+width = 0.142                 # m          MEASURED    20 Oct
+length = 0.290                # m          MEASURED    20 Oct
+height = 0.175                # m          CHECK       inferred, not measured: measure floor to brim
+glass_thickness = 0.005       # m          ASSUMED     from the 0.5 cm base; measure a wall
+glass_density = 2500.0        # kg/m^3     LITERATURE  soda-lime glass
+glass_heat_capacity = 840.0   # J/(kg K)   LITERATURE  soda-lime glass
+glass_conductivity = 1.0      # W/(m K)    LITERATURE  soda-lime glass, 0.9-1.05
+start_temperature = 28.0      # degC       CHOICE      room temperature unless you pre-chill it
+brine_film_h = 270.0          # W/(m^2 K)  ASSUMED     brine side of the glass, taken the same as the can
+
+
+[water]                       # liquid water poured in with the ice
+mass = 1.6                    # kg         CHOICE
+start_temperature = 4.0       # degC       MEASURE     probe it just before it goes in
+
+
+[ice]                         # crushed ice
+mass = 4.0                    # kg         CHOICE
+start_temperature = 0.0       # degC       MEASURE     0 for wet, melting ice; about -18 straight from a freezer
+piece_size = 0.020            # m          MEASURE     side of one piece, treated as a cube
+heap_porosity = 0.40          # -          ASSUMED     fraction of a crushed-ice heap that is gaps, 0.35-0.5
+brine_to_ice_h = 100.0        # W/(m^2 K)  ASSUMED     brine to ice surface: ~50-150 unstirred
+                              #                        (natural convection), several hundred stirred
+surface_model = "bulk"        # -          MODEL       "bulk": the ice surface sits at the freezing point
+                              #                        of the bulk brine.  "salt-limited": meltwater dilutes
+                              #                        the brine at the surface, so melting waits for salt
+                              #                        to reach it (see README.md)
+heat_to_salt_ratio = 30.0     # -          ASSUMED     used only by "salt-limited": how much faster heat
+                              #                        reaches the ice surface than salt does (10-200 in the
+                              #                        literature)
+
+
+[salt]                        # NaCl
+mass = 1.0                    # kg         CHOICE
+start_temperature = 28.0      # degC       MEASURE     usually room temperature
+grain_size = 0.0005           # m          MEASURE     side of one grain; table salt ~0.3-0.5 mm
+dissolve_coefficient = 1e-5   # m/s        ASSUMED     grain-to-brine mass transfer: ~1e-5 stirred,
+                              #                        ~1e-6 unstirred.  Lower it to see the bath stall
+dissolves_as = "halite"       # -          MODEL       which solid the grain surface is: "halite" (the
+                              #                        rock salt that went in) or "hydrohalite" (NaCl.2H2O,
+                              #                        the stable solid below +0.1 C, if a crust forms)
+
+
+[drink]                       # Can 2
+mass = 0.330                  # kg         MEASURE     weigh the full can, then the empty can
+heat_capacity = 4000.0        # J/(kg K)   ASSUMED     sugary soft drink; 4180 for water or a diet drink
+start_temperature = 28.0      # degC       MEASURE
+goes_in_at = 900.0            # s          CHOICE      let the bath and tank settle this long first
+freezes = true                # -          MODEL       false: the drink stays liquid however cold it gets
+freezing_point = -0.9         # degC       MEASURE     where ice first forms; about -0.6 from 10 % sugar
+                              #                        plus ~-0.3 from the CO2.  Diet drinks about -0.3
+freezable_water = 0.89        # -          ASSUMED     mass fraction of the drink that is water
+                              #                        (1 - sugar fraction on the label)
+supercooling = 0.0            # K          ASSUMED     how far below its freezing point the drink cools
+                              #                        before ice appears; a still can can reach 5-8 K
+
+
+[can]                         # Can 2
+diameter = 0.0660             # m          MEASURED    20 Oct
+height = 0.1166               # m          MEASURED    20 Oct
+base_height = 0.010           # m          RIG NOTE    can bottom above the tank floor
+mass = 0.013                  # kg         MEASURE     weigh the empty can; a 330 ml can is ~10-13 g
+heat_capacity = 900.0         # J/(kg K)   LITERATURE  aluminium
+
+
+[can_heat_transfer]           # the drink -> brine path: two films in series
+inside_h = 400.0              # W/(m^2 K)  LITERATURE  drink side, unstirred (Chem. Eng. Educ. bottle study),
+                              #                        at a 25 K drink-to-brine difference
+outside_h = 270.0             # W/(m^2 K)  ASSUMED     brine side, chosen so U ~ 160 (SINTEF tau ~ 265 s)
+inside_h_at_dT = 25.0         # K          LITERATURE  the drink-to-brine difference inside_h applies at
+inside_power_law = true       # -          MODEL       true: the drink-side h follows free convection,
+                              #                        h = inside_h * (dT / inside_h_at_dT)^(1/4).
+                              #                        false: inside_h at every dT
+measured_U = 0.0              # W/(m^2 K)  MEASURE     overall drink -> brine U from a real run; when it is
+                              #                        above 0 it replaces the two films above.  Fit
+                              #                        ln(T_drink - T_brine) against time: the slope is
+                              #                        -1/tau, and U = C_drink / (tau * can area)
+
+
+[stirrer]
+power = 0.0                   # W          MEASURE     heat the stirrer puts into the brine; 0 = no stirrer.
+                              #                        Stirring also raises the h values and the salt
+                              #                        coefficient above -- change those too
+
+
+[materials]                   # handbook properties
+latent_heat = 333550.0        # J/kg       LITERATURE  melting ice at 0 C
+ice_heat_capacity = 2097.0    # J/(kg K)   LITERATURE  ice at 0 C (IAPWS R10-06)
+ice_heat_capacity_slope = 7.35  # J/(kg K^2) LITERATURE  ice cp falls this much per K colder:
+                              #                        1950 at -20 C (IAPWS R10-06).  0 = constant
+ice_density = 917.0           # kg/m^3     LITERATURE
+ice_conductivity = 2.2        # W/(m K)    LITERATURE
+salt_heat_capacity = 864.0    # J/(kg K)   LITERATURE  solid NaCl, 50.5 J/(mol K)
+salt_density = 2165.0         # kg/m^3     LITERATURE  solid NaCl
+dissolving_heat = 66400.0     # J/kg       ASSUMED     heat absorbed dissolving NaCl: 3.88 kJ/mol, the
+                              #                        value at 25 C and infinite dilution, held constant
+brine_heat_capacity = [4189.0, -5794.0, 8579.0]
+                              # J/(kg K)   LITERATURE  c = a + b w + c w^2, w = salt mass fraction.
+                              #                        Fit to Melinder (2010) NaCl(aq), -20 to +10 C, +-33
+brine_density = [1000.0, 786.0]
+                              # kg/m^3     LITERATURE  rho = a + b w.  Fit to Melinder (2010), +-9
+
+
+[phase_diagram]               # NaCl + water
+bodnar = [1.78, -0.0442, 0.0005572]
+                              # -          LITERATURE  freezing curve, Bodnar (1993):
+                              #                        wt% = a x + b x^2 + c x^3, x = degrees below 0 C
+eutectic_temperature = -21.2  # degC       LITERATURE  end of the Bodnar fit (handbooks give -21.1)
+peritectic_temperature = 0.1  # degC       LITERATURE  below this the stable solid is hydrohalite
+peritectic_w = 0.2628         # -          LITERATURE  saturated brine there; must match the halite
+                              #                        line below at the peritectic temperature
+halite_solubility = [35.65, 0.0147]
+                              # g/100 g    LITERATURE  grams of NaCl per 100 g water = a + b T, fit to
+                              #                        handbook values 0-30 C (35.65 at 0, 36.0 at 25)
+
+
+[simulation]
+time_step = 0.5               # s          CHOICE      one tick; the run warns if it is too long
+end_time = 3000.0             # s          CHOICE
+print_every = 60.0            # s          CHOICE      how often b8_simple.py prints a row
+target_temperature = 5.0      # degC       CHOICE      "cold enough": the run reports when the drink gets here
