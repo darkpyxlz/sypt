@@ -28,8 +28,9 @@ the other.  So when the drink goes in, the brine warms first and the ice catches
 up over time; nothing melts instantly.
 
 Heat paths, in W, each positive in the direction of the arrow:
-    room    -> tank glass    through the foam walls and base
-    room    -> brine         through the foam lid
+    room    -> foam          the foam stores heat too, so a warm box keeps
+    foam    -> tank glass    giving some up after the bath goes in (walls, base)
+    foam    -> brine         through the air under the lid
     glass   -> brine         through the wetted glass
     drink   -> brine         through the can
     stirrer -> brine
@@ -151,11 +152,54 @@ def save_inputs(p, path, note=''):
     Path(path).write_text('\n'.join(out) + '\n')
 
 
+# The text settings in the inputs and the values each one allows.
+CHOICES = {('ice', 'surface_model'): ('bulk', 'salt-limited'),
+           ('salt', 'dissolves_as'): ('halite', 'hydrohalite')}
+TAGS = ('MEASURED', 'MEASURE', 'RIG NOTE', 'CHECK', 'ASSUMED', 'LITERATURE', 'CHOICE', 'MODEL')
+
+
+def describe_inputs(path=DEFAULT_INPUTS):
+    """What inputs.toml says about each number, read from its comments:
+    {section: {'note': ..., 'keys': {key: {'unit', 'tag', 'note'}}}}.
+    The web page builds its form from this, and b8_simple.py --list-inputs prints it."""
+    out, section, key = {}, None, None
+    tag_pattern = '|'.join(TAGS)
+    for line in Path(path).read_text().splitlines():
+        header = re.match(r'\[(\w+)\]\s*(?:#\s*(.*))?$', line)
+        entry = re.match(r'^(\w+)\s*=.*?(?:#\s*(.*))?$', line)
+        more = re.match(r'^\s+#\s*(.*)$', line)
+        if header:
+            section, key = header.group(1), None
+            out[section] = {'note': (header.group(2) or '').strip(), 'keys': {}}
+        elif entry and section:
+            key = entry.group(1)
+            out[section]['keys'][key] = {'unit': '', 'tag': '', 'note': ''}
+            text = entry.group(2)
+            if text:
+                _read_comment(out[section]['keys'][key], text, tag_pattern)
+        elif more and section and key:
+            info = out[section]['keys'][key]
+            if not info['tag']:                        # unit and tag on the line below the value
+                _read_comment(info, more.group(1), tag_pattern)
+            else:
+                info['note'] = (info['note'] + ' ' + more.group(1).strip()).strip()
+        elif not line.strip():
+            key = None
+    return out
+
+
+def _read_comment(info, text, tag_pattern):
+    m = re.match(rf'(.*?)\s+({tag_pattern})\b\s*(.*)$', ' ' + text.strip())
+    if m:
+        info['unit'] = m.group(1).strip()
+        info['tag'], info['note'] = m.group(2), m.group(3).strip()
+    else:
+        info['note'] = text.strip()
+
+
 def check_inputs(p):
     """Stop early, with a plain message, on inputs the model cannot use."""
-    choices = {('ice', 'surface_model'): ('bulk', 'salt-limited'),
-               ('salt', 'dissolves_as'): ('halite', 'hydrohalite')}
-    for (section, key), allowed in choices.items():
+    for (section, key), allowed in CHOICES.items():
         value = getattr(p.sections[section], key)
         if value not in allowed:
             raise ValueError(f"[{section}] {key} = {value!r}: use one of {allowed}")
@@ -200,6 +244,15 @@ def solve(f, lo, hi, tol=1e-12):
     return x
 
 
+@dataclass
+class FoamPath:
+    """One heat path through the foam (see Experiment.box_paths)."""
+    G_out: float        # W/K, room -> middle of the foam
+    G_in: float         # W/K, middle of the foam -> inside
+    UA: float           # W/K, the two in series: the steady leak
+    C: float            # J/K, heat the foam holds per kelvin
+
+
 # =============================================================================
 # 2. WHAT THE MODEL STEPS FORWARD, AND WHAT IT WORKS OUT AT EACH MOMENT
 # =============================================================================
@@ -216,6 +269,8 @@ class State:
     ice: float          # kg, ice in the bath
     T_ice: float        # degC, inside the ice pieces
     T_tank: float       # degC, tank glass
+    T_foam_walls: float  # degC, middle of the foam walls and base
+    T_foam_lid: float    # degC, middle of the foam lid
 
 
 @dataclass
@@ -231,19 +286,23 @@ class Snapshot:
     T_surface: float         # degC, ice surface
     T_ice: float             # degC, inside the ice
     T_tank: float            # degC, tank glass
+    T_foam: float            # degC, middle of the foam walls
     ice: float               # kg
     salt_solid: float        # kg
     salt_dissolved: float    # kg
     level: float             # m, liquid surface above the tank floor
     submerged: float         # fraction of the can's height under the liquid
+    can_base: float          # m, bottom of the can above the tank floor
     ice_wet: float           # fraction of the ice heap under the liquid
     heap_bottom: float       # m, bottom of the ice heap
     heap_top: float          # m, top of the ice heap
     dissolving: float        # kg/s of salt going into solution
     Q_drink: float           # W, drink -> brine
     Q_tank: float            # W, tank glass -> brine
-    Q_walls: float           # W, room -> tank glass, through walls and base
-    Q_lid: float             # W, room -> brine, through the lid
+    Q_room_walls: float      # W, room -> foam walls and base
+    Q_room_lid: float        # W, room -> foam lid
+    Q_walls: float           # W, foam walls and base -> tank glass
+    Q_lid: float             # W, foam lid -> brine
     Q_stir: float            # W, stirrer -> brine
     Q_ice: float             # W, brine -> ice surface
     Q_core: float            # W, ice interior -> ice surface
@@ -254,7 +313,7 @@ class Result:
     """A finished run: the history, plus the checks and headline numbers."""
     inputs: Inputs
     history: list            # one Snapshot per time step
-    energy_in: float         # J let in from the room and the stirrer
+    energy_in: float         # J let in from the room (into the foam) and the stirrer
     energy_error: float      # J the bookkeeping failed to account for (should be ~0)
     warnings: list = field(default_factory=list)
 
@@ -298,6 +357,31 @@ class Result:
             energy_in=self.energy_in,
         )
 
+    def summary_lines(self):
+        """The headline numbers as sentences, one per line (the figures and the web page show these)."""
+        s, p = self.summary(), self.inputs
+        target = p.simulation.target_temperature
+        t5 = s['time_to_target']
+        lines = [f"drink reaches {target:g} °C {t5:.0f} s ({mmss(t5)}) after it goes in" if t5 is not None
+                 else f"drink never reaches {target:g} °C"]
+        lines += [
+            f"bath when the drink goes in: {s['brine_at_drink_in']:.1f} °C "
+            f"(warms to {s['brine_peak_after_drink_in']:.1f} °C)",
+            f"coldest bath: {s['coldest_brine']:.1f} °C   (eutectic {p.phase_diagram.eutectic_temperature:g} °C)",
+            f"drink at the end: {s['drink_at_end']:.1f} °C" +
+            (f", {100 * s['drink_frozen_at_end']:.0f} % of its water frozen" if s['drink_frozen_at_end'] > 0 else ''),
+            f"ice melted {s['ice_melted']:.2f} kg, salt crystals left {1000 * s['salt_left']:.0f} g",
+            f"energy check {s['energy_error']:+.1f} J of {s['energy_in']:.0f} J let in (should be ~0)",
+        ]
+        return lines + [f"warning: {w}" for w in self.warnings]
+
+
+def mmss(t):
+    """Seconds as m:ss."""
+    sign = '-' if t < 0 else ''
+    t = abs(t)
+    return f"{sign}{int(t // 60)}:{int(t % 60):02d}"
+
 
 # =============================================================================
 # 3. THE EXPERIMENT -- inputs in, history out
@@ -311,11 +395,13 @@ class Experiment:
 
         # --- numbers worked out once from the inputs -------------------------
         self.floor_area = p.tank.width * p.tank.length
-        self.UA_walls, self.UA_lid = self.box_UA()
+        self.box = self.box_paths()
+        self.UA_walls, self.UA_lid = self.box['walls'].UA, self.box['lid'].UA
         self.tank_C = self.tank_heat_capacity()
         self.glass_U = self.glass_film_U()
         self.drink_C = p.drink.mass * p.drink.heat_capacity + p.can.mass * p.can.heat_capacity
         self.freezable_water = p.drink.mass * p.drink.freezable_water
+        self.can_mass = p.drink.mass + p.can.mass                 # kg, full can
         self.can_ratio = math.pi * (p.can.diameter / 2) ** 2 / self.floor_area
         self.n_ice_pieces = p.ice.mass / (p.materials.ice_density * p.ice.piece_size ** 3)
         self.salt_area0 = 6 * p.salt.mass / (p.materials.salt_density * p.salt.grain_size)
@@ -400,21 +486,43 @@ class Experiment:
     # =========================================================================
     # 3c. The box and the tank
     # =========================================================================
-    def box_UA(self):
-        """Heat leak through the styrofoam, W/K, as (walls + base, lid).
-        Each path is three resistances in series: the room air outside, the foam
-        (Q = k A dT / thickness) and the air gap inside.  Areas are taken at the
-        middle of the foam.  Walls and base leak into the tank glass; the lid
-        leaks through the air above the bath straight into the brine surface."""
+    def box_paths(self):
+        """The two ways heat gets through the styrofoam: 'walls' (walls and base, into
+        the tank glass) and 'lid' (through the air above the bath, into the brine).
+
+        Each path is the room air film, then the foam, then the air gap inside.  The
+        foam's heat capacity sits at its middle: G_out links it to the room, G_in to
+        the inside, and C (J/K) is how much heat it holds per kelvin.  UA is the
+        steady leak, W/K.  Areas are taken at the middle of the foam."""
         b, tank = self.p.box, self.p.tank
         gap = 2 * b.clearance + b.wall_thickness             # tank wall -> middle of foam, both sides
         x, y, z = tank.width + gap, tank.length + gap, tank.height + gap
-        lid = x * y
-        walls_and_base = x * y + 2 * (x * z + y * z)
-        foam = b.wall_thickness / b.foam_conductivity        # m^2 K/W
-        walls_R = 1 / b.outside_air_h + foam + 1 / b.side_gap_h
-        lid_R = 1 / b.outside_air_h + foam + 1 / b.lid_gap_h
-        return walls_and_base / walls_R, lid / lid_R
+        half_foam = b.wall_thickness / 2 / b.foam_conductivity        # m^2 K/W
+        paths = {}
+        for name, area, inside_h in (('walls', x * y + 2 * (x * z + y * z), b.side_gap_h),
+                                     ('lid', x * y, b.lid_gap_h)):
+            G_out = area / (1 / b.outside_air_h + half_foam)
+            G_in = area / (half_foam + 1 / inside_h)
+            paths[name] = FoamPath(G_out, G_in, 1 / (1 / G_out + 1 / G_in),
+                                b.foam_density * b.foam_heat_capacity * area * b.wall_thickness)
+        return paths
+
+    def foam_flows(self, s, T_brine):
+        """Heat flows through the foam, W: (room -> walls, walls -> glass, room -> lid, lid -> brine),
+        and the temperature of the middle of the walls.  Foam with no heat capacity
+        passes on exactly what it receives."""
+        T_room = self.p.room.temperature
+        flows, T_mid = [], {}
+        for name, T_foam, T_inside in (('walls', s.T_foam_walls, s.T_tank), ('lid', s.T_foam_lid, T_brine)):
+            path = self.box[name]
+            if path.C > 0:
+                flows += [path.G_out * (T_room - T_foam), path.G_in * (T_foam - T_inside)]
+                T_mid[name] = T_foam
+            else:
+                Q = path.UA * (T_room - T_inside)
+                flows += [Q, Q]
+                T_mid[name] = T_room - Q / path.G_out
+        return flows, T_mid['walls']
 
     def tank_heat_capacity(self):
         """Glass walls and base, J/K."""
@@ -457,19 +565,31 @@ class Experiment:
         return level, min(level / thickness, 1.0), 0.0, thickness
 
     def liquid_level(self, s, w, drink_in):
-        """Liquid surface (m), fraction of the can under it, fraction of the ice under it,
-        heap bottom and top (m).  Salt crystals sit on the floor; the can, once in,
-        raises the level by the volume of whatever part of it is below the surface."""
+        """Liquid surface (m), fraction of the can under it, bottom of the can (m),
+        fraction of the ice under it, heap bottom and top (m).  Salt crystals sit on
+        the floor; the can, once in, raises the level by the volume of whatever part
+        of it is below the surface.
+
+        With [can] held_down the can stands at base_height whatever happens.  Without
+        it the can floats: a full can (density about 0.9) sinks into brine (1.18)
+        only until it displaces its own weight."""
         c = self.p.can
         V_liquid = (s.water + s.dissolved) / self.brine_density(w) + s.crystals / self.p.materials.salt_density
         level, wet, bottom, top = self.ice_bed(s.ice, V_liquid, w)
-        if not drink_in or level <= c.base_height:
-            return level, 0.0, wet, bottom, top
+        base = c.base_height
+        if drink_in and not c.held_down:
+            depth = self.can_mass / (self.brine_density(w) * math.pi * (c.diameter / 2) ** 2)
+            if depth < c.height and level >= depth * (1 - self.can_ratio):     # it floats
+                level += self.can_ratio * depth
+                return level, depth / c.height, level - depth, wet, bottom, top
+            base = 0.0                                                         # it sits on the floor
+        if not drink_in or level <= base:
+            return level, 0.0, base, wet, bottom, top
         # level = level without the can + can_ratio * (part of the can below the surface)
-        level_partly = (level - self.can_ratio * c.base_height) / (1 - self.can_ratio)
-        if level_partly < c.base_height + c.height:
-            return level_partly, (level_partly - c.base_height) / c.height, wet, bottom, top
-        return level + self.can_ratio * c.height, 1.0, wet, bottom, top
+        level_partly = (level - self.can_ratio * base) / (1 - self.can_ratio)
+        if level_partly < base + c.height:
+            return level_partly, (level_partly - base) / c.height, base, wet, bottom, top
+        return level + self.can_ratio * c.height, 1.0, base, wet, bottom, top
 
     # =========================================================================
     # 3e. Heat and mass transfer
@@ -487,10 +607,10 @@ class Experiment:
         h = self.p.can_heat_transfer
         if h.measured_U > 0:
             return h.measured_U
-        h_in = h.inside_h
-        if h.inside_power_law:
-            h_in = h.inside_h * (max(abs(dT), 1e-6) / h.inside_h_at_dT) ** 0.25
-        return 1.0 / (1.0 / h_in + 1.0 / h.outside_h)
+        free_convection = (max(abs(dT), 1e-6) / h.reference_dT) ** 0.25
+        h_in = h.inside_h * (free_convection if h.inside_power_law else 1.0)
+        h_out = h.outside_h * (free_convection if h.outside_power_law else 1.0)
+        return 1.0 / (1.0 / h_in + 1.0 / h_out)
 
     def ice_piece_side(self, ice):
         """Side of one ice piece now, m.  Pieces shrink as they melt."""
@@ -597,21 +717,22 @@ class Experiment:
         p = self.p
         T_b, w = self.brine_temperature(s)
         drink_in = s.t >= p.drink.goes_in_at
-        level, submerged, wet, bottom, top = self.liquid_level(s, w, drink_in)
+        level, submerged, can_base, wet, bottom, top = self.liquid_level(s, w, drink_in)
+        (Q_room_walls, Q_walls, Q_room_lid, Q_lid), T_foam = self.foam_flows(s, T_b)
         T_drink, frozen = self.drink_temperature(s.H_drink, s.nucleated)
         A_ice, G_core = self.ice_area(s.ice, wet), self.ice_core_G(s.ice, wet)
         T_surface = self.ice_surface_temperature(T_b, w, s.T_ice, A_ice, G_core)
         dT_can = T_drink - T_b
         return Snapshot(
             t=s.t, state=s, drink_in=drink_in, T_drink=T_drink, drink_frozen=frozen,
-            T_brine=T_b, w=w, T_surface=T_surface, T_ice=s.T_ice, T_tank=s.T_tank,
+            T_brine=T_b, w=w, T_surface=T_surface, T_ice=s.T_ice, T_tank=s.T_tank, T_foam=T_foam,
             ice=s.ice, salt_solid=s.crystals, salt_dissolved=s.dissolved,
-            level=level, submerged=submerged, ice_wet=wet, heap_bottom=bottom, heap_top=top,
+            level=level, submerged=submerged, can_base=can_base, ice_wet=wet,
+            heap_bottom=bottom, heap_top=top,
             dissolving=self.dissolve_rate(T_b, w, s.crystals, s.ice),
             Q_drink=self.can_U(dT_can) * self.can_area(submerged) * dT_can if drink_in else 0.0,
             Q_tank=self.glass_U * self.wetted_glass_area(level) * (s.T_tank - T_b),
-            Q_walls=self.UA_walls * (p.room.temperature - s.T_tank),
-            Q_lid=self.UA_lid * (p.room.temperature - T_b),
+            Q_room_walls=Q_room_walls, Q_room_lid=Q_room_lid, Q_walls=Q_walls, Q_lid=Q_lid,
             Q_stir=p.stirrer.power,
             Q_ice=p.ice.brine_to_ice_h * A_ice * (T_b - T_surface),
             Q_core=G_core * (s.T_ice - T_surface),
@@ -620,9 +741,14 @@ class Experiment:
     def step(self, s, f, dt):
         """Move state s forward by dt, using the flows in snapshot f (taken at the
         start of the step).  Returns the new state."""
-        # 1. Drink and tank: plain heat balances.
+        # 1. Drink, tank and foam: plain heat balances.
         H_drink = s.H_drink - f.Q_drink * dt
         T_tank = s.T_tank + (f.Q_walls - f.Q_tank) * dt / self.tank_C
+        T_foam_walls, T_foam_lid = s.T_foam_walls, s.T_foam_lid
+        if self.box['walls'].C > 0:
+            T_foam_walls += (f.Q_room_walls - f.Q_walls) * dt / self.box['walls'].C
+        if self.box['lid'].C > 0:
+            T_foam_lid += (f.Q_room_lid - f.Q_lid) * dt / self.box['lid'].C
 
         # 2. Salt dissolves (or grows back).  The brine's heat content is unchanged:
         #    brine_temperature() turns the dissolving into a cooling.
@@ -653,7 +779,7 @@ class Experiment:
                                     <= d_.freezing_point - d_.supercooling)
 
         return State(s.t + dt, H_drink, nucleated, H_brine, water, dissolved, crystals,
-                     ice, T_ice, T_tank)
+                     ice, T_ice, T_tank, T_foam_walls, T_foam_lid)
 
     def initial_state(self):
         """The bath as it goes in: ice, water and salt at their own starting temperatures,
@@ -664,11 +790,12 @@ class Experiment:
                    + p.salt.mass * p.materials.salt_heat_capacity * p.salt.start_temperature)
         return State(0.0, self.drink_C * p.drink.start_temperature, False, H_brine,
                      p.water.mass, 0.0, p.salt.mass, p.ice.mass, p.ice.start_temperature,
-                     p.tank.start_temperature)
+                     p.tank.start_temperature, p.box.start_temperature, p.box.start_temperature)
 
     def total_heat(self, s):
         """Heat content of everything inside the box, J, for the energy check."""
-        return s.H_brine + s.ice * self.ice_enthalpy(s.T_ice) + self.tank_C * s.T_tank + s.H_drink
+        return (s.H_brine + s.ice * self.ice_enthalpy(s.T_ice) + self.tank_C * s.T_tank + s.H_drink
+                + self.box['walls'].C * s.T_foam_walls + self.box['lid'].C * s.T_foam_lid)
 
     def time_constants(self, f):
         """The fastest things in the model at snapshot f, s.  The time step must be
@@ -683,6 +810,9 @@ class Experiment:
                  'ice interior': G / (s.ice * p.materials.ice_heat_capacity) if s.ice > 0 else 0,
                  'salt dissolving': (p.salt.dissolve_coefficient * self.crystal_area(s.crystals)
                                      * self.brine_density(f.w) / m_brine) if m_brine > 0 else 0}
+        for name, path in self.box.items():
+            if path.C > 0:
+                rates[f'foam {name}'] = (path.G_out + path.G_in) / path.C
         return {k: 1 / r for k, r in rates.items() if r > 0}
 
     def run(self):
@@ -703,7 +833,7 @@ class Experiment:
         E0, E_in, overflowed = self.total_heat(state), 0.0, False
         n_steps = round(p.simulation.end_time / dt)
         for _ in range(n_steps):
-            E_in += (snap.Q_walls + snap.Q_lid + snap.Q_stir) * dt
+            E_in += (snap.Q_room_walls + snap.Q_room_lid + snap.Q_stir) * dt
             state = self.step(state, snap, dt)
             snap = self.describe(state)
             history.append(snap)

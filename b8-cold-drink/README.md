@@ -5,6 +5,9 @@ How cold can the bath get, and how fast does the drink cool?
 
 In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam box.
 
+**Try it in a browser:** https://darkpyxlz.github.io/sypt/ (see *The web simulator* below
+for what has to be switched on first).
+
 | File | What it is |
 |---|---|
 | `inputs.toml` | **Every number the simulation uses.** Put your measurements here. |
@@ -13,6 +16,8 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 | `b8_simple.py` | One run from the command line: a table, a summary and a picture. |
 | `b8_app.py` | The same model behind sliders, with a live drawing of the tank. |
 | `b8_plots.py` | The tank drawing and the graphs, shared by the two programs above. |
+| `b8_controls.py` | Which inputs get a slider or a switch, in the app and on the web page. |
+| `web/` | The web simulator: the same model, run in a browser. |
 | `test_b8.py` | Checks on the model. Run it after changing `b8_model.py`. |
 | `b8_sim.py` | The older one-lump equilibrium model behind the report (unchanged). |
 | `B8-salted-ice-bath.tex` / `.pdf` | Write-up of the `b8_sim.py` model. |
@@ -30,7 +35,9 @@ pip install -r requirements.txt
 python3 b8_simple.py                    # table + summary, saves b8_simple.png, opens a window
 python3 b8_simple.py --inputs my.toml   # use another inputs file
 python3 b8_simple.py --gif              # also saves b8_tank.gif, the tank as an animation (~30 s)
+python3 b8_simple.py --list-inputs      # every input still to measure, with its note
 python3 b8_app.py                       # sliders and a live tank
+python3 -m http.server                  # then open http://localhost:8000/web/ for the web simulator
 python3 test_b8.py                      # checks
 python3 b8_sim.py                       # the report model: checks, rewrites figs/ and numbers.json
 python3 b8_sim.py --quick               # the report model: checks only
@@ -49,6 +56,28 @@ coloured by temperature: blue below 0 °C, red above. The can stands beside the 
 until it goes in. Once the drink starts to freeze, the ice in the can is hatched.
 *Save inputs* writes the current settings to `inputs_saved_<time>.toml`, which
 `b8_simple.py --inputs` can run again.
+
+## The web simulator
+
+`web/` runs the model in a browser. It loads [Pyodide](https://pyodide.org) (Python
+compiled for the browser, about 12 MB the first time, then cached) and copies in
+`b8_model.py`, `b8_controls.py` and `inputs.toml` unchanged. A change to the model is a
+change to the web page too, with nothing to port. A run takes about 0.4 s.
+
+- **Quick controls**: the same sliders and switches as `b8_app.py`.
+- **All inputs**: every number in `inputs.toml`, with its unit, tag and note, built from
+  the file's comments. You can filter them, or show only what still needs measuring.
+- **The tank**: coloured by temperature, with Play and a time slider. Click a graph to
+  jump to that moment.
+- **Load .toml / Download .toml**: the same files `b8_simple.py --inputs` reads.
+  **Copy link** puts your changes in the address, so you can send a scenario to someone.
+
+**Publishing.** `.github/workflows/b8-pages.yml` runs the checks on every push to `main`
+that touches this folder. It then copies the folder to the `gh-pages` branch. GitHub Pages
+has to be switched on once, under *Settings → Pages → Build and deployment → Deploy from a
+branch → `gh-pages`, `/ (root)`*. On a free GitHub plan, Pages needs the repository to be
+public. With GitHub Pro it also works for a private repository, but the site itself is
+public either way.
 
 ## Putting in your measurements
 
@@ -83,13 +112,15 @@ These are the ones that matter:
 
 | Input | Range tried | Time to 5 °C | Bath when the drink goes in |
 |---|---|---|---|
-| `can_heat_transfer.outside_h` (or measure U directly) | ÷3 to ×3 | 374 to 100 s | – |
+| `can_heat_transfer.outside_h` | ÷3 to ×3 | 374 to 101 s | – |
+| `can_heat_transfer.measured_U`, if you measure it | 120 to 200 W/(m² K) | 234 to 141 s | – |
+| `can.held_down` | held / floating | 169 / 249 s | – |
 | `drink.mass`, `drink.heat_capacity` | ±20 % | 204 to 135 s | – |
-| `ice.brine_to_ice_h` | ÷3 to ×3 | 188 to 166 s | −17.4 to −21.1 °C |
+| `ice.brine_to_ice_h` | ÷3 to ×3 | 189 to 166 s | −17.4 to −21.1 °C |
 | `can_heat_transfer.inside_h` | ±20 % | 185 to 158 s | – |
 | `drink.start_temperature` | ±2 K | 180 to 158 s | – |
 | `salt.dissolve_coefficient` | ÷3 to ×3 | 178 to 169 s | −18.9 to −20.8 °C |
-| `ice.surface_model` | bulk / salt-limited | 169 / 238 s | −20.7 / −11.4 °C |
+| `ice.surface_model` | bulk / salt-limited | 169 / 239 s | −20.7 / −11.4 °C |
 
 Everything else changes the time by 2 s or less and the bath by 0.25 K or less.
 That leads to two cheap experiments:
@@ -103,7 +134,9 @@ That leads to two cheap experiments:
    model: "bulk" predicts −20.7 °C at 15 min, "salt-limited" predicts −11.4 °C.
 
 Weigh the drink (full can minus empty), and take its heat capacity from the sugar
-on the label (about 4180 × (1 − 0.6 × sugar fraction) J/(kg K)).
+on the label (about 4180 × (1 − 0.6 × sugar fraction) J/(kg K)). **Hold the can down:**
+a full can floats in brine with only about 73 % of it under, and takes about 50 % longer (249 s, not 169 s).
+`python3 b8_simple.py --list-inputs` prints the whole checklist.
 
 ## The physics
 
@@ -127,11 +160,18 @@ Each change was switched on alone, on top of the first version's physics:
 | Ice heat capacity falls with temperature | IAPWS R10-06: 2097 J/(kg K) at 0 °C, 1950 at −20 °C | 178 s | −20.10 °C |
 | Brine heat capacity and density fitted to data | Melinder (2010). The old lines were off by up to 156 J/(kg K) and 17 kg/m³ | 178 s | −20.00 °C |
 | Halite solubility 35.65 g/100 g at 0 °C | Matches handbooks and meets the peritectic. The old fit left a 0.2 wt % step there | 178 s | −20.11 °C |
-| **All of these (`inputs.toml`)** | | **169 s** | **−20.74 °C** |
+| The foam holds heat (box starts at room temperature) | The box gives up about 6 kJ as it cools, mostly in the first 15 min: as much as melting 19 g of ice | 169 s | −20.71 °C |
+| **All of these (`inputs.toml`)** | | **169 s** | **−20.71 °C** |
 
-Also new: stirrer heat (`stirrer.power`) and a measured-U override. Every rig and
-material number is now in `inputs.toml`, including the Bodnar coefficients and the
-solubility line.
+Also new:
+- stirrer heat (`stirrer.power`);
+- a measured-U override;
+- a box start temperature, for runs back to back;
+- a floating can (`can.held_down = false`);
+- free convection on the brine side as well (`outside_power_law`).
+
+Every rig and material number is now in `inputs.toml`, including the Bodnar
+coefficients and the solubility line.
 
 ### Physics switches
 
@@ -147,7 +187,12 @@ solubility line.
 - `salt.dissolves_as`: "halite" (default) or "hydrohalite" (a crust of NaCl·2H₂O
   on the grains).
 - `drink.freezes`, `drink.supercooling`: how the drink freezes.
-- `can_heat_transfer.inside_power_law`, `can_heat_transfer.measured_U`: the can.
+- `can_heat_transfer.inside_power_law` and `outside_power_law`: free convection
+  (h ∝ ΔT^¼) on each side of the can. Switching on the brine side as well gives
+  162 s. That is the consistent choice for an unstirred bath, but `outside_h` was
+  chosen as a constant to match SINTEF, so refit it if you switch this on.
+- `can_heat_transfer.measured_U`: a measured U, which replaces both films.
+- `can.held_down`: the can held at its base height, or floating.
 
 ### What the model still leaves out
 
@@ -155,8 +200,8 @@ solubility line.
   cold dense brine sits on the floor and fresh meltwater sits at the top (report §9).
 - **One drink temperature.** The 4 °C density maximum and the slush that stops
   convection in a freezing can are not modelled.
-- **The can is held at its base height.** A full can (density about 0.9) floats in
-  brine (density 1.18), so the rig must hold it down, or less of it is under.
+- **Ice touching the can.** Crushed ice pressed against the can would conduct heat
+  straight out of it. Only brine is counted.
 - **Salt touches only brine.** Grains sitting on ice would melt it directly.
 - **The dissolving heat is constant.** 3.88 kJ/mol is the value at 25 °C and infinite
   dilution. It has not been checked for strong cold brine; ±20 % moves the bath by

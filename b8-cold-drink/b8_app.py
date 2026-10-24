@@ -9,8 +9,8 @@ Drag the time slider, press Play, or use the arrow keys, to watch the tank
 through the run.  "Save inputs" writes the current settings to a new .toml file
 in this folder; run it again with  python3 b8_simple.py --inputs <that file>.
 
-The sliders cover the numbers you are most likely to vary.  Everything else
-is in the inputs file.
+The sliders and switches (listed in b8_controls.py) cover the numbers you are
+most likely to vary.  Everything else is in the inputs file.
 """
 
 import argparse
@@ -22,34 +22,10 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
 
 import b8_plots
+from b8_controls import OPTIONS, SLIDERS, SWITCHES
 from b8_model import HERE, Experiment, load_inputs, save_inputs
 
-# (section, key, label, low, high, step, unit shown, how to show it)
-# "how to show it" is a factor from the SI value in the inputs file to the unit
-# shown, or 'log' for a slider that moves in powers of ten.
-SLIDERS = [
-    ('ice', 'mass', 'ice', 0.5, 8.0, 0.1, 'kg', 1),
-    ('water', 'mass', 'water', 0.0, 5.0, 0.1, 'kg', 1),
-    ('salt', 'mass', 'salt', 0.0, 2.0, 0.05, 'kg', 1),
-    ('ice', 'start_temperature', 'ice starts at', -25.0, 0.0, 0.5, '°C', 1),
-    ('water', 'start_temperature', 'water starts at', 0.0, 30.0, 0.5, '°C', 1),
-    ('salt', 'start_temperature', 'salt starts at', 0.0, 40.0, 0.5, '°C', 1),
-    ('drink', 'start_temperature', 'drink starts at', 0.0, 40.0, 0.5, '°C', 1),
-    ('drink', 'goes_in_at', 'drink goes in at', 0.0, 40.0, 0.5, 'min', 1 / 60),
-    ('room', 'temperature', 'room', 10.0, 40.0, 0.5, '°C', 1),
-    ('can_heat_transfer', 'outside_h', 'h brine side of can', 50.0, 1500.0, 10.0, 'W/m²K', 1),
-    ('can_heat_transfer', 'inside_h', 'h drink side of can', 50.0, 1500.0, 10.0, 'W/m²K', 1),
-    ('ice', 'brine_to_ice_h', 'h brine to ice', 20.0, 600.0, 5.0, 'W/m²K', 1),
-    ('ice', 'piece_size', 'ice piece size', 0.5, 5.0, 0.1, 'cm', 100),
-    ('salt', 'grain_size', 'salt grain size', 0.1, 3.0, 0.05, 'mm', 1000),
-    ('salt', 'dissolve_coefficient', 'salt dissolving k', -7.0, -4.0, 0.05, 'm/s', 'log'),
-    ('stirrer', 'power', 'stirrer power', 0.0, 10.0, 0.5, 'W', 1),
-]
-SWITCHES = [('drink', 'freezes', 'drink can freeze'),
-            ('can_heat_transfer', 'inside_power_law', 'drink-side h ~ dT^1/4')]
 PLAY_SPEED = 100      # seconds of the run shown per real second when you press Play
-CHOICES = [('salt', 'dissolves_as', 'salt grains are', ('halite', 'hydrohalite')),
-           ('ice', 'surface_model', 'ice surface', ('bulk', 'salt-limited'))]
 
 
 class App:
@@ -97,7 +73,7 @@ class App:
             value = getattr(self.p.sections[section], key)
             shown = math.log10(value) if show == 'log' else value * show
             low, high = min(low, shown), max(high, shown)
-            ax = fig.add_axes([0.105, y, 0.105, 0.02])
+            ax = fig.add_axes([0.105, y, 0.105, 0.019])
             s = Slider(ax, label, low, high, valinit=shown, valstep=step,
                        valfmt=f'%.3g {unit}' if show != 'log' else '%.2f')
             s.label.set_fontsize(8)
@@ -106,10 +82,10 @@ class App:
                 s.valtext.set_text(f'{value:.1e} {unit}')
             s.on_changed(lambda v, entry=(section, key, show, unit, s): self._slider_moved(entry, v))
             self.sliders.append(s)
-            y -= 0.034
+            y -= 0.031
 
-        y -= 0.015
-        ax = fig.add_axes([0.015, y - 0.055, 0.21, 0.065], frameon=False)
+        y -= 0.01
+        ax = fig.add_axes([0.015, y - 0.085, 0.23, 0.095], frameon=False)
         self.switches = CheckButtons(ax, [label for _, _, label in SWITCHES],
                                      [bool(getattr(self.p.sections[s], k)) for s, k, _ in SWITCHES])
         self.switches.on_clicked(self._switch_flipped)
@@ -117,8 +93,8 @@ class App:
             text.set_fontsize(8)
 
         self.choices = []
-        for i, (section, key, label, options) in enumerate(CHOICES):
-            ax = fig.add_axes([0.015 + i * 0.12, y - 0.155, 0.11, 0.085], frameon=False)
+        for i, (section, key, label, options) in enumerate(OPTIONS):
+            ax = fig.add_axes([0.015 + i * 0.12, y - 0.175, 0.11, 0.07], frameon=False)
             ax.set_title(label, fontsize=8, loc='left')
             r = RadioButtons(ax, options, active=options.index(getattr(self.p.sections[section], key)))
             for text in r.labels:
@@ -173,7 +149,7 @@ class App:
         self.graphs.draw(self.result)
         self.text_ax.clear()
         self.text_ax.axis('off')
-        self.text_ax.text(0, 1, '\n'.join(b8_plots.summary_lines(self.result)), va='top',
+        self.text_ax.text(0, 1, '\n'.join(self.result.summary_lines()), va='top',
                           fontsize=9.5, linespacing=1.6, transform=self.text_ax.transAxes)
         t5 = self.result.time_to_target()
         self.time.valmax = self.p.simulation.end_time / 60
@@ -238,7 +214,7 @@ class App:
         for i, (section, key, _) in enumerate(SWITCHES):
             if self.switches.get_status()[i] != bool(getattr(self.p.sections[section], key)):
                 self.switches.set_active(i)
-        for r, (section, key, _, options) in zip(self.choices, CHOICES):
+        for r, (section, key, _, options) in zip(self.choices, OPTIONS):
             r.set_active(options.index(getattr(self.p.sections[section], key)))
         self.p = self.original.copy()                 # the widgets' callbacks changed it again
         self.rerun()

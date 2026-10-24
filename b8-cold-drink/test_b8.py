@@ -7,7 +7,8 @@ Each check prints one line; the script stops at the first failure.
 import tempfile
 from pathlib import Path
 
-from b8_model import Experiment, load_inputs, save_inputs
+from b8_controls import OPTIONS, SLIDERS, SWITCHES
+from b8_model import TAGS, Experiment, describe_inputs, load_inputs, save_inputs
 
 HERE = Path(__file__).resolve().parent
 passed = 0
@@ -48,7 +49,11 @@ for name, changes in {
         'freezer ice, stirrer': [('ice', 'start_temperature', -18.0), ('stirrer', 'power', 5.0)],
         'supercooling drink': [('drink', 'supercooling', 6.0)],
         'no salt': [('salt', 'mass', 0.0)],
-        'ice and salt, no water': [('water', 'mass', 0.0)]}.items():
+        'ice and salt, no water': [('water', 'mass', 0.0)],
+        'floating can': [('can', 'held_down', False)],
+        'brine-side power law, measured U off': [('can_heat_transfer', 'outside_power_law', True)],
+        'measured U': [('can_heat_transfer', 'measured_U', 160.0)],
+        'box pre-cooled, no foam heat': [('box', 'start_temperature', -10.0), ('box', 'foam_density', 0.0)]}.items():
     p = base.copy()
     for section, key, value in changes:
         setattr(p.sections[section], key, value)
@@ -63,7 +68,27 @@ for name, p in variants.items():
           abs((first.ice + first.water) - (last.ice + last.water)) < 1e-9
           and abs((first.dissolved + first.crystals) - (last.dissolved + last.crystals)) < 1e-9)
 
-# --- 3. Phase diagram -----------------------------------------------------------
+# --- 3. The can, the foam and the heat-transfer options -------------------------
+fl = results['floating can'].at(1200)
+expected = (base.drink.mass + base.can.mass) / (Experiment(base).brine_density(fl.w)
+                                                 * 3.141592653589793 * (base.can.diameter / 2) ** 2 * base.can.height)
+check('floating can sinks only until it displaces its weight', abs(fl.submerged - expected) < 1e-9,
+      f"({100 * fl.submerged:.1f} % under)")
+check('floating can cools more slowly than a held one',
+      results['floating can'].time_to_target() > results['inputs.toml'].time_to_target())
+check('measured U replaces the films', Experiment(variants['measured U']).can_U(30.0) == 160.0)
+ex = Experiment(base)
+gap = 2 * base.box.clearance + base.box.wall_thickness
+lid_area = (base.tank.width + gap) * (base.tank.length + gap)
+foam = base.box.foam_density * base.box.foam_heat_capacity * base.box.wall_thickness * lid_area
+check('foam lid heat capacity = density x c x volume', abs(ex.box['lid'].C - foam) < 1e-9, f"({foam:.0f} J/K)")
+ex0 = Experiment(load_inputs(HERE / 'inputs_original.toml'))
+first_leak = base.box.foam_conductivity / base.box.wall_thickness * (
+    lid_area + lid_area + 2 * (base.tank.width + base.tank.length + 2 * gap) * (base.tank.height + gap))
+check("without films the leak is the first version's k A / t", abs(ex0.UA_walls + ex0.UA_lid - first_leak) < 1e-12,
+      f"({first_leak:.4f} W/K)")
+
+# --- 4. Phase diagram -----------------------------------------------------------
 ex = Experiment(base)
 worst = max(abs(ex.freezing_point(ex.bodnar_w(x)) + x) for x in [0.5 * i for i in range(1, 42)])
 check('freezing_point() inverts Bodnar', worst < 1e-9, f"(worst {worst:.1e} K)")
@@ -71,7 +96,7 @@ gap = abs(ex.halite_saturation_w(base.phase_diagram.peritectic_temperature) - ba
 check('halite line meets the peritectic', gap < 1e-4, f"(gap {gap:.1e})")
 check('no salt: the bath stays at or above 0 C', min(results['no salt'].series('T_brine')) > -1e-6)
 
-# --- 4. The drink freezing --------------------------------------------------------
+# --- 5. The drink freezing --------------------------------------------------------
 d = base.drink
 frozen = [s for s in results['inputs.toml'].history if s.drink_frozen > 0]
 check('drink freezes once below its freezing point', len(frozen) > 0)
@@ -84,7 +109,7 @@ check('supercooled drink stays liquid, then warms when ice appears',
       coldest_liquid < d.freezing_point - 5.9 and first_ice.T_drink > coldest_liquid + 3,
       f"(liquid down to {coldest_liquid:.1f} C, {first_ice.T_drink:.1f} C once ice appears)")
 
-# --- 5. Inputs files --------------------------------------------------------------
+# --- 6. Inputs files --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
     short = Path(tmp) / 'short.toml'
     short.write_text('[bath_typo]\nmass = 1\n')
@@ -107,5 +132,14 @@ with tempfile.TemporaryDirectory() as tmp:
     saved = Path(tmp) / 'saved.toml'
     save_inputs(p, saved, note='round trip')
     check('save_inputs() then load_inputs() gives the same numbers', load_inputs(saved).as_dict() == p.as_dict())
+
+info = describe_inputs()
+untagged = [f"{sec}.{key}" for sec, about in info.items() for key, e in about['keys'].items() if e['tag'] not in TAGS]
+check('every line of inputs.toml has a tag', not untagged, ', '.join(untagged))
+check('the comments describe every key', all(set(info[sec]['keys']) == set(base.sections[sec].values())
+                                             for sec in base.sections))
+controls = [(c[0], c[1]) for c in SLIDERS + SWITCHES + OPTIONS]
+check('every slider and switch names a real input',
+      all(key in base.sections[sec].values() for sec, key in controls))
 
 print(f"\nall {passed} checks passed")

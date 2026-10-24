@@ -3,7 +3,6 @@ b8_plots.py -- pictures of a B8 run.
 
     TankView     a side view of the rig at one moment, coloured by temperature
     TimeGraphs   temperatures, masses, heat flows and levels against time
-    summary_lines(result)   the headline numbers as text
     dashboard(result)       both together in one figure (b8_simple.py saves this)
     save_gif(result, path)  the tank view as an animation
 
@@ -19,7 +18,7 @@ from matplotlib import colors, font_manager
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
-from b8_model import HERE
+from b8_model import HERE, mmss
 
 DRINK, BRINE, ICE, TANK, SALT, ROOM = '#C2410C', '#0F766E', '#1F2937', '#6B7280', '#7C3AED', '#B45309'
 TEMPERATURE = colors.TwoSlopeNorm(vmin=-22.0, vcenter=0.0, vmax=30.0)
@@ -44,13 +43,6 @@ def colour(T):
     return CMAP(TEMPERATURE(T))
 
 
-def mmss(t):
-    """Seconds as m:ss."""
-    sign = '-' if t < 0 else ''
-    t = abs(t)
-    return f"{sign}{int(t // 60)}:{int(t % 60):02d}"
-
-
 # =============================================================================
 # The tank, seen from the long side
 # =============================================================================
@@ -66,7 +58,6 @@ class TankView:
         self.gap, self.foam = 100 * p.box.clearance, 100 * p.box.wall_thickness
         self.can_x = 0.62 * self.L                       # where the can stands (centre)
         self.can_r, self.can_h = 50 * p.can.diameter, 100 * p.can.height
-        self.can_base = 100 * p.can.base_height
         rng = random.Random(8)                           # same ice layout every time
         self.ice_spots = [(rng.random(), rng.random()) for _ in range(400)]
         self.salt_spots = [(rng.random(), rng.random()) for _ in range(160)]
@@ -79,8 +70,6 @@ class TankView:
                                facecolor=FOAM, edgecolor='#D6C79A', zorder=0))
         ax.add_patch(Rectangle((-gl - g, -gl), L + 2 * (gl + g), H + gl + g, facecolor=AIR,
                                edgecolor='none', zorder=0.5))
-        ax.text(-gl - g - f / 2, H / 2, 'styrofoam box', rotation=90, ha='center', va='center',
-                fontsize=7, color='#8A7A4A')
         self.waiting_x = L + gl + g + f + 2 + self.can_r     # where the can stands before it goes in
         ax.set_xlim(-gl - g - f - 1, self.waiting_x + self.can_r + 1)
         ax.set_ylim(-gl - f - 1, H + gl + g + f + 5)
@@ -153,7 +142,7 @@ class TankView:
         # the can: in the bath, or waiting above the box
         x_mid = self.can_x if s.drink_in else self.waiting_x
         x0 = x_mid - self.can_r
-        y0 = self.can_base if s.drink_in else -gl - self.foam
+        y0 = 100 * s.can_base if s.drink_in else -gl - self.foam
         alpha = 1.0 if s.drink_in else 0.6
         self._patch(FancyBboxPatch((x0, y0), 2 * self.can_r, self.can_h,
                                    boxstyle='round,pad=0,rounding_size=0.8',
@@ -176,6 +165,8 @@ class TankView:
                     ha='right', va='top', color=BRINE, bbox=boxed)
         self._label(L + gl + 0.3, -gl - 0.3, f"glass {s.T_tank:.1f} °C", fontsize=7, color=TANK,
                     ha='right', va='top')
+        self._label(-gl - self.gap - self.foam / 2, H / 2, f"styrofoam, middle {s.T_foam:.0f} °C",
+                    rotation=90, ha='center', va='center', fontsize=7, color='#8A7A4A')
         t_drink = s.t - ex.p.drink.goes_in_at
         status = f"drink in for {mmss(t_drink)}" if s.drink_in else f"drink goes in in {mmss(-t_drink)}"
         self._label(-gl - self.gap - self.foam, H + gl + self.gap + self.foam + 4.5,
@@ -254,7 +245,7 @@ class TimeGraphs:
         a.plot(t, self.series('Q_drink'), color=DRINK, label='drink → brine')
         a.plot(t, self.series('Q_ice'), color=BRINE, label='brine → ice (melting)')
         a.plot(t, self.series('Q_tank'), color=TANK, label='glass → brine')
-        a.plot(t, [s.Q_walls + s.Q_lid for s in self.history], color=ROOM, ls=':', label='room → box')
+        a.plot(t, [s.Q_room_walls + s.Q_room_lid for s in self.history], color=ROOM, ls=':', label='room → box')
         a.set_ylabel('heat flow (W)')
         a.legend(fontsize=7, loc='upper right')
 
@@ -270,25 +261,6 @@ class TimeGraphs:
 # =============================================================================
 # Text, the one-page dashboard and the animation
 # =============================================================================
-def summary_lines(result):
-    """The headline numbers of a run, one line each."""
-    s, p = result.summary(), result.inputs
-    target = p.simulation.target_temperature
-    t5 = s['time_to_target']
-    lines = [f"drink reaches {target:g} °C {t5:.0f} s ({mmss(t5)}) after it goes in" if t5 is not None
-             else f"drink never reaches {target:g} °C"]
-    lines += [
-        f"bath when the drink goes in: {s['brine_at_drink_in']:.1f} °C "
-        f"(warms to {s['brine_peak_after_drink_in']:.1f} °C)",
-        f"coldest bath: {s['coldest_brine']:.1f} °C   (eutectic {p.phase_diagram.eutectic_temperature:g} °C)",
-        f"drink at the end: {s['drink_at_end']:.1f} °C" +
-        (f", {100 * s['drink_frozen_at_end']:.0f} % of its water frozen" if s['drink_frozen_at_end'] > 0 else ''),
-        f"ice melted {s['ice_melted']:.2f} kg, salt crystals left {1000 * s['salt_left']:.0f} g",
-        f"energy check {s['energy_error']:+.1f} J of {s['energy_in']:.0f} J let in (should be ~0)",
-    ]
-    return lines + [f"warning: {w}" for w in result.warnings]
-
-
 def dashboard(result, experiment, t_show=None):
     """One figure: the tank at time t_show (default: when the drink reaches the
     target), the summary, and the four graphs."""
@@ -304,7 +276,7 @@ def dashboard(result, experiment, t_show=None):
     view.update(result.at(t_show))
     text_ax = fig.add_subplot(gs[3, 0])
     text_ax.axis('off')
-    text_ax.text(0.02, 0.95, '\n'.join(summary_lines(result)), va='top', fontsize=9, linespacing=1.5,
+    text_ax.text(0.02, 0.95, '\n'.join(result.summary_lines()), va='top', fontsize=9, linespacing=1.5,
                  transform=text_ax.transAxes)
     axes = [fig.add_subplot(gs[i, 1]) for i in range(4)]
     for a in axes[1:]:

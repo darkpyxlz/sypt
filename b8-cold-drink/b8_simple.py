@@ -9,20 +9,22 @@ styrofoam box.  The physics is in b8_model.py; every number is in inputs.toml.
     python3 b8_simple.py --inputs inputs_original.toml     the first version's physics
     python3 b8_simple.py --no-show                save b8_simple.png without opening a window
     python3 b8_simple.py --gif                    also save b8_tank.gif, the tank as an animation
+    python3 b8_simple.py --list-inputs            what still needs measuring, with the current values
 
 For sliders and a live picture of the tank, run b8_app.py instead.
 """
 
 import argparse
 
-from b8_model import Experiment, load_inputs
+from b8_model import Experiment, describe_inputs, load_inputs
 
 
 def print_run(ex, result):
     """The table every print_every seconds, then the summary."""
     p = result.inputs
     print(f"inputs: {' + '.join(p.source)}")
-    print(f"foam leak: walls+base {ex.UA_walls:.3f} W/K, lid {ex.UA_lid:.3f} W/K")
+    print(f"foam leak: walls+base {ex.UA_walls:.3f} W/K, lid {ex.UA_lid:.3f} W/K, "
+          f"foam holds {ex.box['walls'].C + ex.box['lid'].C:.0f} J/K")
     print(f"tank glass {ex.tank_C / p.tank.glass_heat_capacity:.2f} kg (C = {ex.tank_C:.0f} J/K), "
           f"drink C = {ex.drink_C:.0f} J/K")
     print(f"ice surface {ex.ice_area(p.ice.mass, 1.0):.2f} m^2 when fully wet, "
@@ -50,14 +52,29 @@ def print_run(ex, result):
           f"{summary['energy_in']:.0f} J let in (should be ~0)")
 
 
+def list_inputs(p):
+    """Print every input that is not yet a measurement or a handbook value."""
+    info = describe_inputs()
+    for tag in ('MEASURE', 'CHECK', 'RIG NOTE', 'ASSUMED'):
+        print(f"\n{tag}")
+        for section, about in info.items():
+            for key, entry in about['keys'].items():
+                if entry['tag'] == tag:
+                    value = getattr(p.sections[section], key)
+                    print(f"  [{section}] {key} = {value!r} {entry['unit']}\n      {entry['note']}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--inputs', help='inputs file to lay over inputs.toml')
     parser.add_argument('--no-show', action='store_true', help='do not open a plot window')
     parser.add_argument('--no-plot', action='store_true', help='numbers only, no figure at all')
     parser.add_argument('--gif', action='store_true', help='also save b8_tank.gif')
+    parser.add_argument('--list-inputs', action='store_true', help='list the inputs still to measure')
     args = parser.parse_args()
 
+    if args.list_inputs:
+        return list_inputs(load_inputs(args.inputs))
     ex = Experiment(load_inputs(args.inputs))
     result = ex.run()
     print_run(ex, result)

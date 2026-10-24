@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B8 Cold Drink Simulator</title>
+<meta name="description" content="SYPT 2027 B8: a can of drink cooled in an ice, water and salt bath. The full Python model, running in your browser.">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pyodide@0.28.3/pyodide.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="kicker">SYPT 2027 · Problem B8 · Cold drink</div>
+  <h1>Salted ice bath simulator</h1>
+  <p class="lede">A can of drink cools in crushed ice, water and salt, in a glass tank inside a
+    styrofoam box. Change any input and the whole run is repeated here, in your browser, by the
+    same Python model (<a href="../b8_model.py"><code>b8_model.py</code></a>) and the same inputs
+    (<a href="../inputs.toml"><code>inputs.toml</code></a>) as the code in the repository.</p>
+  <nav class="links">
+    <a href="../B8-salted-ice-bath.pdf">Report (PDF)</a>
+    <a href="../README.md">README</a>
+    <a href="#how">How it works</a>
+  </nav>
+</header>
+
+<div id="loading" class="loading" role="status">
+  <div class="spinner" aria-hidden="true"></div>
+  <p id="loading-text">Loading…</p>
+</div>
+
+<main class="layout" id="app" hidden>
+  <aside class="panel controls">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-quick-btn" aria-selected="true" aria-controls="tab-quick">Quick controls</button>
+      <button role="tab" id="tab-all-btn" aria-selected="false" aria-controls="tab-all">All inputs</button>
+    </div>
+
+    <section id="tab-quick" role="tabpanel">
+      <label class="preset">Start from
+        <select id="preset">
+          <option value="inputs">inputs.toml (the rig)</option>
+          <option value="original">inputs_original.toml (first version)</option>
+          <option value="upload" hidden>an uploaded file</option>
+        </select>
+      </label>
+      <div id="sliders" class="sliders"></div>
+      <div id="switches" class="switches"></div>
+      <div id="options" class="options"></div>
+    </section>
+
+    <section id="tab-all" role="tabpanel" hidden>
+      <p class="hint">Every number in <code>inputs.toml</code>, with its unit, where it comes from and how
+        to measure it. Type a new value and press Enter. Changed values are marked with a dot.</p>
+      <div class="filters">
+        <input id="filter" type="search" placeholder="Filter by name, tag or note" aria-label="Filter inputs">
+        <label><input type="checkbox" id="only-todo"> only what still needs measuring</label>
+      </div>
+      <div id="all-inputs"></div>
+    </section>
+
+    <div class="buttons">
+      <button id="reset" type="button">Reset</button>
+      <button id="load" type="button">Load .toml</button>
+      <button id="download" type="button">Download .toml</button>
+      <button id="share" type="button">Copy link</button>
+      <input id="file" type="file" accept=".toml,text/plain" hidden>
+    </div>
+    <p id="status" class="status" aria-live="polite"></p>
+  </aside>
+
+  <section class="panel stage">
+    <div class="canvas-wrap"><canvas id="tank" aria-label="Side view of the tank, coloured by temperature"></canvas></div>
+    <div class="scale" aria-hidden="true">
+      <span>−20 °C</span><div class="bar"></div><span>+30 °C</span>
+      <em>blue below 0 °C, red above</em>
+    </div>
+    <div class="timebar">
+      <button id="play" type="button" aria-label="Play">▶ Play</button>
+      <input id="time" type="range" min="0" max="100" value="0" aria-label="Time in the run">
+      <span id="clock" class="clock"></span>
+    </div>
+    <ul id="summary" class="summary" aria-live="polite"></ul>
+  </section>
+
+  <section class="panel charts">
+    <div class="chart"><canvas id="chart-temperatures"></canvas></div>
+    <div class="chart"><canvas id="chart-masses"></canvas></div>
+    <div class="chart"><canvas id="chart-heat"></canvas></div>
+    <div class="chart"><canvas id="chart-level"></canvas></div>
+    <p class="hint">Click a graph to jump the tank to that moment.</p>
+  </section>
+</main>
+
+<footer class="about" id="how">
+  <h2>How it works</h2>
+  <p>The bath is brine, crushed ice and salt crystals. Salt dissolves and ice melts at finite rates. Heat flows
+    between the room, the foam, the glass, the brine, the ice and the drink, and the model steps the heat
+    content of each forward every half second, so energy is conserved (every run reports the check). The
+    drink can freeze, gradually, as its sugar concentrates. The page loads
+    <a href="https://pyodide.org">Pyodide</a> (Python compiled for the browser), copies in the model files
+    unchanged, and runs them on your computer. Nothing is sent anywhere.</p>
+  <h2>Putting in your measurements</h2>
+  <p>Open <em>All inputs</em>. Each number carries a tag:</p>
+  <ul class="tags-legend" id="tags-legend"></ul>
+  <p>Change the values you have measured, then <em>Download .toml</em>. The file runs unchanged with
+    <code>python3 b8_simple.py --inputs b8_inputs.toml</code>, and <em>Load .toml</em> reads it back here, as
+    does a short file holding only the lines that change. <em>Copy link</em> puts your changes in the address,
+    so you can send a scenario to someone else.</p>
+  <p>What matters most for the time to 5 °C is the heat transfer across the can: fit a drink run and enter the
+    measured U. For the bath temperature, it is the ice and salt rates: a 15-minute run with no drink pins
+    them, and tells "bulk" from "salt-limited" ice surfaces.</p>
+</footer>
+</body>
+</html>

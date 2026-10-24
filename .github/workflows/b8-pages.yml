@@ -1,0 +1,48 @@
+name: B8 web simulator
+
+# Publishes b8-cold-drink/ (with the simulator in web/) to the gh-pages branch.
+# GitHub Pages must be switched on once: Settings -> Pages -> Deploy from a
+# branch -> gh-pages, / (root).  The site is then at https://<owner>.github.io/<repo>/
+
+on:
+  push:
+    branches: [main]
+    paths: ['b8-cold-drink/**', '.github/workflows/b8-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: b8-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check the model before publishing (pure Python, no packages)
+        working-directory: b8-cold-drink
+        run: python3 test_b8.py
+      - name: Assemble the site
+        run: |
+          mkdir _site
+          cp -r b8-cold-drink/. _site/
+          rm -rf _site/__pycache__ _site/web/__pycache__
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>B8 Cold Drink Simulator</title>' \
+            '<meta http-equiv="refresh" content="0; url=web/"><a href="web/">B8 cold drink simulator</a>' \
+            > _site/index.html
+          touch _site/.nojekyll
+      - name: Push to the gh-pages branch
+        working-directory: _site
+        run: |
+          git init -q -b gh-pages
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Publish the B8 simulator from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

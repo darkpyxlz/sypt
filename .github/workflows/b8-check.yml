@@ -25,5 +25,16 @@ jobs:
           grep -q "drink reaches 5 C" <<< "$out"
       - name: Run test_b8.py
         run: python3 test_b8.py
+      - name: Check the web simulator's bridge
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          sys.path.insert(0, 'web')
+          import bridge
+          setup = json.loads(bridge.setup())
+          run = json.loads(bridge.run(json.dumps(setup['inputs'])))
+          assert 'series' in run, run
+          print(run['lines'][0])
+          PY
       - name: Run b8_sim.py --quick
         run: python3 b8_sim.py --quick
