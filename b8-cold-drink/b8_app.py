@@ -98,7 +98,7 @@ class App:
 
         self.choices = []
         for i, (section, key, label, options) in enumerate(OPTIONS):
-            ax = fig.add_axes([0.015 + i * 0.12, y - 0.175, 0.11, 0.07], frameon=False)
+            ax = fig.add_axes([0.015 + i * 0.088, y - 0.175, 0.085, 0.07], frameon=False)
             ax.set_title(label, fontsize=8, loc='left')
             r = RadioButtons(ax, options, active=options.index(getattr(self.p.sections[section], key)))
             for text in r.labels:

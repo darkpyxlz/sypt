@@ -87,6 +87,7 @@ def run(text):
         'rig': {
             'floor_area': ex.floor_area, 'drink_water': ex.freezable_water, 'ring_edges': ex.ring_edges,
             'UA_box': ex.box_UA, 'U_can_at_25K': ex.can_U(25.0),
+            'can_lying': ex.lying, 'can_gas_depth': ex.can_gas_depth,
         },
     }))
 

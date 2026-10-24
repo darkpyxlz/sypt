@@ -557,9 +557,11 @@ function drawTank() {
   // sizes in cm, as in the Python drawing
   const L = 100 * p.tank.length, H = 100 * p.tank.height;
   const gl = Math.max(100 * p.tank.glass_thickness, 0.35), g = 100 * p.box.clearance, f = 100 * p.box.wall_thickness;
-  const r = 50 * p.can.diameter, canH = 100 * p.can.height;
-  const canX = 0.62 * L, waitX = L + gl + g + f + 2 + r;
-  const x0 = -(gl + g + f) - 1, x1 = waitX + r + 1, y0 = -(gl + f) - 1, y1 = H + gl + g + f + 1;
+  // the can to scale, as it sits: lying along the tank (seen side on) or upright
+  const lying = state.run.rig.can_lying, r = 50 * p.can.diameter;
+  const canW = lying ? 100 * p.can.height : 2 * r, canH = lying ? 2 * r : 100 * p.can.height;
+  const canX = 0.62 * L, waitX = L + gl + g + f + 2 + canW / 2;
+  const x0 = -(gl + g + f) - 1, x1 = waitX + canW / 2 + 1, y0 = -(gl + f) - 1, y1 = H + gl + g + f + 1;
   const k = Math.min(W / (x1 - x0), Hpx / (y1 - y0));
   const ox = (W - k * (x1 - x0)) / 2, oy = (Hpx - k * (y1 - y0)) / 2;
   const X = (x) => ox + k * (x - x0);
@@ -593,14 +595,33 @@ function drawTank() {
   box(0, 0, L, H, '#F8FAFC');
 
   // brine up to the surface, ring by ring: the outermost ring fills the tank, then each
-  // ring nearer the can is drawn on top of it, centred on the can
+  // ring nearer the can is drawn on top of it: bands either side of an upright can,
+  // shells round one lying down
   const level = Math.min(100 * at('level'), H + 1);
   const edges = state.run.rig.ring_edges.map((r) => 100 * r), rings = S.T_rings[i];
+  const base = 100 * (S.drink_in[i] ? at('can_base') : p.can.base_height);
   box(0, 0, L, level, tempColour(rings[rings.length - 1], 0.85));
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(X(0), Y(level), k * L, k * level);
+  ctx.clip();
   for (let n = rings.length - 2; n >= 0; n--) {
-    const left = Math.max(canX - edges[n + 1], 0), right = Math.min(canX + edges[n + 1], L);
-    box(left, 0, right - left, level, tempColour(rings[n], 0.85));
+    if (lying) {
+      const pad = edges[n + 1] - r;
+      ctx.beginPath();
+      ctx.roundRect(X(canX - canW / 2 - pad), Y(base + canH + pad), k * (canW + 2 * pad), k * (canH + 2 * pad), k * pad);
+      ctx.fillStyle = tempColour(rings[n], 0.85);
+      ctx.fill();
+    } else {
+      const left = Math.max(canX - edges[n + 1], 0), right = Math.min(canX + edges[n + 1], L);
+      box(left, 0, right - left, level, tempColour(rings[n], 0.85));
+    }
   }
+  ctx.restore();
+  // how far a point is from the can's axis, measured as the rings are
+  const distance = (x, y) => (lying
+    ? r + Math.hypot(Math.max(Math.abs(x - canX) - canW / 2, 0), Math.max(Math.abs(y - base - r) - r, 0))
+    : Math.abs(x - canX));
   ctx.strokeStyle = '#334155';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(X(0), Y(level)); ctx.lineTo(X(L), Y(level)); ctx.stroke();
@@ -623,7 +644,7 @@ function drawTank() {
     const n = Math.min(ICE_SPOTS.length, Math.max(1, Math.round(area / (side * side))));
     ctx.globalAlpha = 0.95;
     for (const [u, v] of ICE_SPOTS.slice(0, n)) {
-      const x = u * L, a = sides[ringOf(Math.abs(x - canX))];
+      const x = u * L, a = sides[ringOf(distance(x, bottom + v * (top - bottom)))];
       if (a > 0) box(Math.min(Math.max(x - a / 2, 0), L - a), bottom + v * Math.max(top - bottom - a, 0), a, a, '#E0F2FE', '#7DD3FC', 0.8);
     }
     ctx.globalAlpha = 1;
@@ -636,7 +657,7 @@ function drawTank() {
   const cx = inBath ? canX : waitX, cy = inBath ? 100 * at('can_base') : -(gl + f);
   ctx.globalAlpha = inBath ? 1 : 0.6;
   ctx.beginPath();
-  ctx.roundRect(X(cx - r), Y(cy + canH), 2 * r * k, canH * k, 0.8 * k);
+  ctx.roundRect(X(cx - canW / 2), Y(cy + canH), canW * k, canH * k, 0.8 * k);
   ctx.fillStyle = frozen > 0 ? '#E0F2FE' : tempColour(at('T_drink'));
   ctx.fill();
   if (frozen > 0) {                                     // ice in the can is hatched; it grows in from the wall
@@ -645,26 +666,33 @@ function drawTank() {
     ctx.fill();
     const s = Math.sqrt(1 - frozen);
     ctx.beginPath();
-    ctx.roundRect(X(cx - s * r), Y(cy + (1 + s) * canH / 2), 2 * s * r * k, s * canH * k, 0.5 * k);
+    ctx.roundRect(X(cx - s * canW / 2), Y(cy + (1 + s) * canH / 2), s * canW * k, s * canH * k, 0.5 * k);
     ctx.fillStyle = tempColour(at('T_drink'));
     ctx.fill();
   }
-  const gas = 100 * num(p.can.headspace);               // the gas above the drink: no heat through it
+  const gas = 100 * state.run.rig.can_gas_depth;        // the gas above the drink: no heat through it
   if (gas > 0) {
     ctx.fillStyle = '#F8FAFC';
-    ctx.fillRect(X(cx - r + 0.25), Y(cy + canH - 0.25), (2 * r - 0.5) * k, (gas - 0.25) * k);
+    ctx.fillRect(X(cx - canW / 2 + 0.25), Y(cy + canH - 0.25), (canW - 0.5) * k, (gas - 0.25) * k);
   }
   ctx.beginPath();
-  ctx.roundRect(X(cx - r), Y(cy + canH), 2 * r * k, canH * k, 0.8 * k);
+  ctx.roundRect(X(cx - canW / 2), Y(cy + canH), canW * k, canH * k, 0.8 * k);
   ctx.strokeStyle = '#475569';
   ctx.lineWidth = 1.2;
   ctx.stroke();
+  if (lying) {                                          // the lid end, on the right
+    ctx.beginPath();
+    ctx.moveTo(X(cx + canW / 2 - 0.7), Y(cy + 0.4));
+    ctx.lineTo(X(cx + canW / 2 - 0.7), Y(cy + canH - 0.4));
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
   ctx.globalAlpha = 1;
   const drinkLines = ['drink', `${at('T_drink').toFixed(1)} °C`];
   if (frozen > 0) drinkLines.push(`${Math.round(100 * frozen)} % frozen`);
   if (!inBath) drinkLines.push(Number.isFinite(num(p.drink.goes_in_at)) ? `in at ${mmss(num(p.drink.goes_in_at))}` : 'not in this run');
   label(cx, cy + canH / 2, drinkLines, { align: 'center', middle: true });
-  if (inBath) label(cx + r + 0.3, cy + 0.2 * canH + 3 * font / k, ['next to', 'the can', `${at('T_near').toFixed(1)} °C`],
+  if (inBath) label(cx + canW / 2 + 0.3, cy + (lying ? 0 : 0.2 * canH) + 3 * font / k, ['next to', 'the can', `${at('T_near').toFixed(1)} °C`],
     { colour: COLOURS.near, size: font * 0.9 });
 
   // brine, glass, foam and the clock

@@ -56,7 +56,9 @@ for name, changes in {
         'measured U': [('can_heat_transfer', 'measured_U', 160.0)],
         'box pre-cooled, no foam heat': [('box', 'start_temperature', -10.0), ('box', 'foam_density', 0.0)],
         'leaky box: gaps and a measured leak': [('box', 'gaps_leak', 0.2), ('box', 'measured_UA', 0.6)],
-        'tank lifted on spacers': [('box', 'tank_on_floor', False)]}.items():
+        'tank lifted on spacers': [('box', 'tank_on_floor', False)],
+        'upright can': [('can', 'orientation', 'upright')],
+        'upright can, floating': [('can', 'orientation', 'upright'), ('can', 'held_down', False)]}.items():
     p = base.copy()
     for section, key, value in changes:
         setattr(p.sections[section], key, value)
@@ -72,11 +74,11 @@ for name, p in variants.items():
           and abs((first.dissolved + first.crystals) - (last.dissolved + last.crystals)) < 1e-9)
 
 # --- 3. The can, the foam and the heat-transfer options -------------------------
-fl = results['floating can'].at(1200)
-expected = (base.drink.mass + base.can.mass) / (Experiment(base).brine_density(fl.w)
-                                                 * 3.141592653589793 * (base.can.diameter / 2) ** 2 * base.can.height)
-check('floating can sinks only until it displaces its weight', abs(fl.submerged - expected) < 1e-9,
-      f"({100 * fl.submerged:.1f} % under)")
+for name in ('floating can', 'upright can, floating'):
+    fl, ex_fl = results[name].at(1200), Experiment(variants[name])
+    displaced = ex_fl.can_volume_under(fl.submerged * ex_fl.can_tall) * ex_fl.brine_density(fl.w)
+    check(f'{name} sinks only until it displaces its weight', abs(displaced - ex_fl.can_mass) < 1e-9,
+          f"({100 * fl.submerged:.1f} % of its height under)")
 check('floating can cools more slowly than a held one',
       results['floating can'].time_to_target() > results['inputs.toml'].time_to_target())
 check('measured U replaces the films', Experiment(variants['measured U']).can_U(30.0) == 160.0)
@@ -147,20 +149,32 @@ check('box test: a log fit of the water temperature gives back the leak', abs(fi
 
 # --- 6. The liquid level and the areas that follow it -------------------------------
 jumps = [abs(b.level - a.level) for a, b in zip(r_def.history, r_def.history[1:])]
-check('the liquid level never jumps (the can is lowered in)', max(jumps) < 1e-3,
-      f"(largest change in one step {100 * max(jumps):.3f} cm)")
+check('the liquid level never jumps (the can is lowered in)', max(jumps) < 2e-3,
+      f"(largest change in one step {100 * max(jumps):.3f} cm, of {100 * ex.can_volume / ex.floor_area:.2f} cm in all)")
+rise = r_def.at(base.drink.goes_in_at + base.drink.lowering_time + 1).level - r_def.at(base.drink.goes_in_at - 1).level
+check('the can, once under, raises the level by its own volume', abs(rise - ex.can_volume / ex.floor_area) < 2e-4,
+      f"({100 * rise:.2f} cm)")
 lowered = r_def.at(base.drink.goes_in_at + base.drink.lowering_time + 1)
 check('once down, the can stands on its holder', abs(lowered.can_base - base.can.base_height) < 1e-12
       and lowered.submerged == 1.0)
-can = base.can
-steps = [ex.can_area(i / 1000) for i in range(1001)]
-side_step = 2 * 3.141592653589793 * can.diameter / 2 * can.height / 1000
-check("the can's heat-passing area changes smoothly with the brine level",
-      max(b - a for a, b in zip(steps, steps[1:])) <= side_step * (1 + 1e-9) and min(b - a for a, b in zip(steps, steps[1:])) >= 0)
+can, pi = base.can, math.pi
 r_can = can.diameter / 2
-check('a submerged can passes heat through its bottom and its side up to the drink',
-      abs(ex.can_area(1.0) - 3.141592653589793 * r_can * (r_can + 2 * (can.height - can.headspace))) < 1e-12,
-      f"({1e4 * ex.can_area(1.0):.1f} cm2)")
+ex_up = Experiment(variants['upright can'])
+for name, e in (('on its side', ex), ('upright', ex_up)):
+    steps = [e.can_area(i / 1000) for i in range(1001)]
+    check(f"can {name}: its heat-passing area changes smoothly with the brine level",
+          max(b - a for a, b in zip(steps, steps[1:])) < 0.03 * steps[-1] and min(b - a for a, b in zip(steps, steps[1:])) >= 0)
+check('upright, a submerged can passes heat through its bottom and its side up to the drink',
+      abs(ex_up.can_area(1.0) - pi * r_can * (r_can + 2 * (can.height - can.headspace))) < 1e-12,
+      f"({1e4 * ex_up.can_area(1.0):.1f} cm2)")
+gas = ex.can_gas_depth
+wet_arc = 2 * r_can * math.acos((gas - r_can) / r_can)
+check('on its side, it passes heat through both ends and the wall below the gas strip',
+      abs(ex.can_area(1.0) - (2 * ex.segment_area(can.diameter - gas) + wet_arc * can.height)) < 1e-12
+      and abs(can.height * (pi * r_can ** 2 - ex.segment_area(can.diameter - gas)) - pi * r_can ** 2 * can.headspace) < 1e-12,
+      f"({1e4 * ex.can_area(1.0):.1f} cm2, gas strip {100 * gas:.2f} cm deep)")
+check('on its side, free convection on both films is on_side_factor stronger',
+      abs(ex.can_U(25.0) / ex_up.can_U(25.0) - base.can_heat_transfer.on_side_factor) < 1e-12)
 
 # --- 7. Phase diagram -----------------------------------------------------------
 ex = Experiment(base)

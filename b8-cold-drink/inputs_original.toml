@@ -22,6 +22,7 @@ freezes = false
 lowering_time = 0.0           # the can dropped in at once
 
 [can]
+orientation = "upright"       # the can stood upright
 headspace = 0.0               # and its lid passed heat once under
 
 [can_heat_transfer]

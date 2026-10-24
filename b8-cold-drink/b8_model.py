@@ -169,7 +169,8 @@ def save_inputs(p, path, note=''):
 
 # The text settings in the inputs and the values each one allows.
 CHOICES = {('ice', 'surface_model'): ('bulk', 'salt-limited'),
-           ('salt', 'dissolves_as'): ('halite', 'hydrohalite')}
+           ('salt', 'dissolves_as'): ('halite', 'hydrohalite'),
+           ('can', 'orientation'): ('on its side', 'upright')}
 TAGS = ('MEASURED', 'MEASURE', 'RIG NOTE', 'CHECK', 'ASSUMED', 'LITERATURE', 'CHOICE', 'MODEL')
 
 
@@ -245,6 +246,8 @@ def check_inputs(p):
         raise ValueError("[drink] lowering_time must be 0 or more")
     if not 0 <= p.can.headspace < p.can.height:
         raise ValueError("[can] headspace must be at least 0 and less than the can's height")
+    if not 0 < p.can_heat_transfer.on_side_factor < math.inf:
+        raise ValueError("[can_heat_transfer] on_side_factor must be above 0")
 
 
 def solve(f, lo, hi, tol=1e-12):
@@ -482,7 +485,15 @@ class Experiment:
         self.drink_C = p.drink.mass * p.drink.heat_capacity + p.can.mass * p.can.heat_capacity
         self.freezable_water = p.drink.mass * p.drink.freezable_water
         self.can_mass = p.drink.mass + p.can.mass                 # kg, full can
-        self.can_ratio = math.pi * (p.can.diameter / 2) ** 2 / self.floor_area
+        r_can = p.can.diameter / 2
+        self.can_volume = math.pi * r_can ** 2 * p.can.height
+        self.lying = p.can.orientation == 'on its side'
+        self.can_tall = p.can.diameter if self.lying else p.can.height   # how high it stands, m
+        # the gas inside the can: [can] headspace is measured with the can upright; lying
+        # down, the same gas makes a strip along the top, this deep (m)
+        gas = math.pi * r_can ** 2 * p.can.headspace
+        self.can_gas_depth = (solve(lambda h: p.can.height * self.segment_area(h) - gas, 0.0, 2 * r_can)
+                              if self.lying and gas > 0 else p.can.headspace)
         self.n_ice_pieces = p.ice.mass / (p.materials.ice_density * p.ice.piece_size ** 3)
         # the rings around the can, from its wall out to the tank taken as a cylinder of
         # the same floor area.  Their edges are spaced evenly in log(r), so the rings are
@@ -688,49 +699,91 @@ class Experiment:
         level, wet, bottom, top = self.ice_bed(s.ice, V_liquid, w)
         if not drink_in:
             return level, 0.0, c.base_height, wet, bottom, top
-        # where the can comes to rest (its bottom, m)
+        # where the can comes to rest (its lowest point, m)
+        A, tall = self.floor_area, self.can_tall
         rest = c.base_height
         if not c.held_down:
-            depth = self.can_mass / (self.brine_density(w) * math.pi * (c.diameter / 2) ** 2)
-            if depth < c.height and level >= depth * (1 - self.can_ratio):     # it floats
-                rest = level - depth * (1 - self.can_ratio)
+            weight_volume = self.can_mass / self.brine_density(w)        # brine it must displace
+            if weight_volume < self.can_volume:
+                depth = self.can_depth_for(weight_volume)
+                if level - depth + self.can_volume_under(depth) / A >= 0:   # deep enough: it floats
+                    rest = level - depth + self.can_volume_under(depth) / A
+                else:
+                    rest = 0.0
             else:
-                rest = 0.0                                                     # it sits on the floor
+                rest = 0.0                                                   # it sits on the floor
         # where it is now: on its way down from the surface
         lowering = self.p.drink.lowering_time
         done = 1.0 if lowering <= 0 else min((s.t - self.p.drink.goes_in_at) / lowering, 1.0)
         start = max(level, rest)
         can_bottom = start + (rest - start) * done
-        # the part under the surface, d, raises the level by can_ratio * d
-        under = min(max((level - can_bottom) / (1 - self.can_ratio), 0.0), c.height)
-        return level + self.can_ratio * under, under / c.height, can_bottom, wet, bottom, top
+        # how deep it is under the surface, d: the part under the surface raises the level,
+        # so d = level - can_bottom + (volume under d) / floor area
+        if level - can_bottom + self.can_volume / A >= tall:
+            under = tall                                                     # all of it
+        elif level <= can_bottom:
+            under = 0.0
+        else:
+            under = solve(lambda d: level - can_bottom + self.can_volume_under(d) / A - d, 0.0, tall)
+        return level + self.can_volume_under(under) / A, under / tall, can_bottom, wet, bottom, top
+
+    def segment_area(self, depth):
+        """Area of the part of the can's circular end below `depth` (m) from its lowest
+        point, m^2: a circular segment."""
+        r = self.p.can.diameter / 2
+        depth = min(max(depth, 0.0), 2 * r)
+        return r * r * math.acos((r - depth) / r) - (r - depth) * math.sqrt(max(2 * r * depth - depth * depth, 0.0))
+
+    def can_volume_under(self, depth):
+        """Volume of the can below `depth` (m) from its lowest point, m^3."""
+        c = self.p.can
+        if self.lying:
+            return c.height * self.segment_area(depth)
+        return math.pi * (c.diameter / 2) ** 2 * min(max(depth, 0.0), c.height)
+
+    def can_depth_for(self, volume):
+        """How deep the can must sink to have `volume` (m^3) under the surface, m."""
+        if volume >= self.can_volume:
+            return self.can_tall
+        if not self.lying:
+            return volume / (math.pi * (self.p.can.diameter / 2) ** 2)
+        return solve(lambda d: self.can_volume_under(d) - volume, 0.0, self.can_tall)
 
     # =========================================================================
     # 3e. Heat and mass transfer
     # =========================================================================
     def can_area(self, submerged):
         """Can wall that passes heat from the drink to the brine, m^2, with `submerged`
-        the fraction of the can's height under the brine.  Heat crosses the wall only
-        where there is liquid on both sides: the bottom, and the side up to the lower
-        of the two surfaces, the brine's outside and the drink's inside ([can]
-        headspace below the top).  The lid and the wall above the drink have gas
-        behind them and pass little heat; only a brim-full can (headspace 0) passes
-        heat through its lid, once the lid is under."""
+        the fraction of the can's height (as it lies) under the brine.  Heat crosses the
+        wall only where there is liquid on both sides: up to the lower of the two
+        surfaces, the brine's outside and the drink's inside.  Above the drink is gas,
+        which passes little heat.
+
+        Upright: the bottom, and the side up to the drink ([can] headspace below the
+        top); only a brim-full can (headspace 0) passes heat through its lid, once the
+        lid is under.  On its side: both ends and the curved wall, up to the gas strip
+        along the top."""
         c = self.p.can
         r = c.diameter / 2
-        wet_side = min(submerged * c.height, c.height - c.headspace)
+        wet = min(submerged * self.can_tall, self.can_tall - self.can_gas_depth)
+        if self.lying:
+            arc = 2 * r * math.acos(min(max((r - wet) / r, -1.0), 1.0))
+            return 2 * self.segment_area(wet) + arc * c.height
         lid = math.pi * r * r if c.headspace == 0 and submerged >= 1.0 else 0.0
-        return math.pi * r * r + 2 * math.pi * r * wet_side + lid
+        return math.pi * r * r + 2 * math.pi * r * wet + lid
 
     def can_U(self, dT):
         """Drink -> brine, W/(m^2 K): two films in series (the aluminium wall is negligible),
-        or the measured U if one has been entered."""
+        or the measured U if one has been entered.  inside_h and outside_h are for an
+        upright can; free convection round a can on its side is stronger (the length that
+        sets it is the 6.6 cm diameter, not the 11.7 cm height), by on_side_factor."""
         h = self.p.can_heat_transfer
         if h.measured_U > 0:
             return h.measured_U
         free_convection = (max(abs(dT), 1e-6) / h.reference_dT) ** 0.25
-        h_in = h.inside_h * (free_convection if h.inside_power_law else 1.0)
-        h_out = h.outside_h * (free_convection if h.outside_power_law else 1.0)
+        lying = h.on_side_factor if self.lying else 1.0
+        h_in = lying * h.inside_h * (free_convection if h.inside_power_law else 1.0)
+        h_out = lying * h.outside_h * (free_convection if h.outside_power_law else 1.0)
         return 1.0 / (1.0 / h_in + 1.0 / h_out)
 
     def ice_piece_side(self, ice, n=None):
@@ -758,12 +811,14 @@ class Experiment:
         """Conductance between neighbouring rings, W/K: conduction through a cylindrical
         shell of brine from the middle of one ring to the middle of the next,
             G = 2 pi k_eff H / ln(r_next / r),  k_eff = brine conductivity x convection_factor,
-        with H the depth of the bath.  A still bath has convection_factor 1; inf
-        makes the bath perfectly mixed."""
+        with H the length of the shells: the depth of the bath round an upright can, the
+        can's own length round one on its side.  A still bath has convection_factor 1;
+        inf makes the bath perfectly mixed."""
         if level <= 0:
             return 0.0
         k_eff = self.brine_conductivity(w) * self.p.heat_spreading.convection_factor
-        return 2 * math.pi * k_eff * level / self.ring_log_step
+        length = self.p.can.height if self.lying else level
+        return 2 * math.pi * k_eff * length / self.ring_log_step
 
     def ice_surface_temperature(self, T_brine, w, T_ice, A_ice, G_core):
         """Temperature of the ice surface, set by [ice] surface_model.

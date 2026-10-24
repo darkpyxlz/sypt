@@ -46,4 +46,5 @@ SWITCHES = [
 OPTIONS = [
     ('salt', 'dissolves_as', 'salt grains are', CHOICES[('salt', 'dissolves_as')]),
     ('ice', 'surface_model', 'ice surface', CHOICES[('ice', 'surface_model')]),
+    ('can', 'orientation', 'the can is', CHOICES[('can', 'orientation')]),
 ]

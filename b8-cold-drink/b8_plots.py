@@ -12,6 +12,7 @@ brine is drawn ring by ring around the can, so the warmer brine next to the
 can shows, and each ring's ice is drawn at that ring's piece size.
 """
 
+import math
 import os
 import random
 
@@ -59,8 +60,12 @@ class TankView:
         self.L, self.H = 100 * p.tank.length, 100 * p.tank.height
         self.glass = max(100 * p.tank.glass_thickness, 0.35)
         self.gap, self.foam = 100 * p.box.clearance, 100 * p.box.wall_thickness
-        self.can_x = 0.62 * self.L                       # where the can stands (centre)
-        self.can_r, self.can_h = 50 * p.can.diameter, 100 * p.can.height
+        self.can_x = 0.62 * self.L                       # where the can is (centre)
+        # the can to scale, as it sits: lying along the tank (seen side on) or upright
+        self.lying = experiment.lying
+        self.can_r = 50 * p.can.diameter
+        self.can_w = 100 * (p.can.height if self.lying else p.can.diameter)    # drawn width, cm
+        self.can_h = 100 * experiment.can_tall                                 # drawn height, cm
         rng = random.Random(8)                           # same ice layout every time
         self.ice_spots = [(rng.random(), rng.random()) for _ in range(400)]
         self.salt_spots = [(rng.random(), rng.random()) for _ in range(160)]
@@ -73,8 +78,8 @@ class TankView:
                                facecolor=FOAM, edgecolor='#D6C79A', zorder=0))
         ax.add_patch(Rectangle((-gl - g, -gl), L + 2 * (gl + g), H + gl + g, facecolor=AIR,
                                edgecolor='none', zorder=0.5))
-        self.waiting_x = L + gl + g + f + 2 + self.can_r     # where the can stands before it goes in
-        ax.set_xlim(-gl - g - f - 1, self.waiting_x + self.can_r + 1)
+        self.waiting_x = L + gl + g + f + 2 + self.can_w / 2     # where the can waits before it goes in
+        ax.set_xlim(-gl - g - f - 1, self.waiting_x + self.can_w / 2 + 1)
         ax.set_ylim(-gl - f - 1, H + gl + g + f + 5)
         ax.set_aspect('equal')
         ax.axis('off')
@@ -84,6 +89,16 @@ class TankView:
                                     aspect=40, shrink=0.8)
             cb.set_label('temperature (°C): blue below 0, red above', fontsize=8)
             cb.set_ticks([-20, -10, 0, 10, 20, 30])
+
+    def distance_from_can(self, x, y, base):
+        """How far the point (x, y) is from the can's axis, cm, measured as the rings are:
+        across, from an upright can's axis; from a can lying with its lowest point at
+        `base`, its radius plus the distance from its outline."""
+        if not self.lying:
+            return abs(x - self.can_x)
+        dx = max(abs(x - self.can_x) - self.can_w / 2, 0.0)
+        dy = max(abs(y - base - self.can_r) - self.can_r, 0.0)
+        return self.can_r + math.hypot(dx, dy)
 
     def ring_of(self, distance):
         """Which ring a point `distance` cm from the can's axis is in (inside the can: the first)."""
@@ -119,14 +134,22 @@ class TankView:
         self._patch(Rectangle((0, 0), L, H, facecolor=AIR, edgecolor='none', zorder=1.1))
 
         # brine up to the liquid surface, ring by ring: the outermost ring fills the tank,
-        # then each ring nearer the can is drawn on top of it, centred on the can
+        # then each ring nearer the can is drawn on top of it: bands either side of an
+        # upright can, shells round one lying down
         level = min(100 * s.level, H + 1)
-        self._patch(Rectangle((0, 0), L, level, facecolor=colour(s.T_rings[-1]), alpha=0.85,
-                              edgecolor='none', zorder=2))
+        brine = self._patch(Rectangle((0, 0), L, level, facecolor=colour(s.T_rings[-1]), alpha=0.85,
+                                      edgecolor='none', zorder=2))
+        base = 100 * (s.can_base if s.drink_in else ex.p.can.base_height)
         for i in range(len(s.T_rings) - 2, -1, -1):
-            left, right = max(self.can_x - self.edges[i + 1], 0), min(self.can_x + self.edges[i + 1], L)
-            self._patch(Rectangle((left, 0), right - left, level, facecolor=colour(s.T_rings[i]), alpha=0.85,
-                                  edgecolor='none', zorder=2))
+            if self.lying:
+                pad = self.edges[i + 1] - self.can_r
+                ring = FancyBboxPatch((self.can_x - self.can_w / 2, base), self.can_w, self.can_h,
+                                      boxstyle=f'round,pad={pad},rounding_size={pad}')
+            else:
+                left, right = max(self.can_x - self.edges[i + 1], 0), min(self.can_x + self.edges[i + 1], L)
+                ring = Rectangle((left, 0), right - left, level)
+            ring.set(facecolor=colour(s.T_rings[i]), alpha=0.85, edgecolor='none', zorder=2)
+            self._patch(ring).set_clip_path(brine)
         self._keep(ax.plot([0, L], [level, level], color='#334155', lw=0.8, zorder=2.1)[0])
 
         # salt crystals on the floor, as a loose pile (~45 % gaps)
@@ -151,8 +174,8 @@ class TankView:
             n = min(len(self.ice_spots), max(1, round(area / (100 * ex.ice_piece_side(s.ice)) ** 2)))
             squares = []
             for u, v in self.ice_spots[:n]:
-                x = u * L
-                side = sides[self.ring_of(abs(x - self.can_x))]
+                x, y = u * L, bottom + v * (top - bottom)
+                side = sides[self.ring_of(self.distance_from_can(x, y, base))]
                 if side > 0:
                     squares.append(Rectangle((min(max(x - side / 2, 0), L - side),
                                               bottom + v * max(top - bottom - side, 0)), side, side))
@@ -162,26 +185,29 @@ class TankView:
                         f"ice {s.ice:.2f} kg\ninside {s.T_ice:.1f} °C\nsurface {s.T_surface:.1f} °C",
                         fontsize=7, color=ICE, va='center', bbox=boxed)
 
-        # the can: in the bath, or waiting above the box
+        # the can, to scale: in the bath, or waiting beside the box
         x_mid = self.can_x if s.drink_in else self.waiting_x
-        x0 = x_mid - self.can_r
+        x0, w = x_mid - self.can_w / 2, self.can_w
         y0 = 100 * s.can_base if s.drink_in else -gl - self.foam
         alpha = 1.0 if s.drink_in else 0.6
-        self._patch(FancyBboxPatch((x0, y0), 2 * self.can_r, self.can_h,
+        self._patch(FancyBboxPatch((x0, y0), w, self.can_h,
                                    boxstyle='round,pad=0,rounding_size=0.8',
                                    facecolor=ICE_FACE if s.drink_frozen > 0 else colour(s.T_drink),
                                    hatch='////' if s.drink_frozen > 0 else None,
                                    edgecolor='#475569', lw=1.0, alpha=alpha, zorder=4))
         if s.drink_frozen > 0:                           # the frozen layer grows in from the wall
             k = (1 - s.drink_frozen) ** 0.5
-            self._patch(FancyBboxPatch((x_mid - k * self.can_r, y0 + (1 - k) * self.can_h / 2),
-                                       2 * k * self.can_r, k * self.can_h,
+            self._patch(FancyBboxPatch((x_mid - k * w / 2, y0 + (1 - k) * self.can_h / 2),
+                                       k * w, k * self.can_h,
                                        boxstyle='round,pad=0,rounding_size=0.5',
                                        facecolor=colour(s.T_drink), edgecolor='none', zorder=4.1))
-        gas = 100 * ex.p.can.headspace                   # the gas above the drink: no heat through it
+        gas = 100 * ex.can_gas_depth                     # the gas above the drink: no heat through it
         if gas > 0:
-            self._patch(Rectangle((x0 + 0.25, y0 + self.can_h - gas), 2 * self.can_r - 0.5, gas - 0.25,
+            self._patch(Rectangle((x0 + 0.25, y0 + self.can_h - gas), w - 0.5, gas - 0.25,
                                   facecolor=AIR, edgecolor='none', alpha=alpha, zorder=4.2))
+        if self.lying:                                   # the lid end, on the right
+            self._keep(ax.plot([x0 + w - 0.7] * 2, [y0 + 0.4, y0 + self.can_h - 0.4], color='#475569',
+                               lw=0.8, alpha=alpha, zorder=4.3)[0])
         frozen = f"\n{100 * s.drink_frozen:.0f} % frozen" if s.drink_frozen > 0 else ''
         t_in = ex.p.drink.goes_in_at
         waiting = '' if s.drink_in else f"\nin at {mmss(t_in)}" if t_in < float('inf') else "\nnot in this run"
@@ -192,8 +218,8 @@ class TankView:
         self._label(L - 0.5, max(level - 1.0, 0.8 + salt_h), f"brine {s.T_brine:.1f} °C\n{100 * s.w:.1f} % salt",
                     ha='right', va='top', color=BRINE, bbox=boxed)
         if s.drink_in:
-            self._label(x_mid + self.can_r + 0.3, y0 + 0.2 * self.can_h, f"next to\nthe can\n{s.T_near:.1f} °C",
-                        fontsize=7, color=NEAR, va='bottom', bbox=boxed)
+            self._label(x0 + w + 0.3, y0 + (0.0 if self.lying else 0.2 * self.can_h),
+                        f"next to\nthe can\n{s.T_near:.1f} °C", fontsize=7, color=NEAR, va='bottom', bbox=boxed)
         self._label(L + gl + 0.3, -gl - 0.3, f"glass {s.T_tank:.1f} °C", fontsize=7, color=TANK,
                     ha='right', va='top')
         self._label(-gl - self.gap - self.foam / 2, H / 2, f"styrofoam, middle {s.T_foam:.0f} °C",

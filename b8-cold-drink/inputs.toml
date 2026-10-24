@@ -113,14 +113,18 @@ supercooling = 0.0            # K          ASSUMED     how far below its freezin
 [can]                         # Can 2
 diameter = 0.0660             # m          MEASURED    20 Oct
 height = 0.1166               # m          MEASURED    20 Oct
-base_height = 0.010           # m          RIG NOTE    can bottom above the tank floor
+base_height = 0.010           # m          RIG NOTE    lowest point of the can above the tank floor
 mass = 0.013                  # kg         MEASURE     weigh the empty can; a 330 ml can is ~10-13 g
 heat_capacity = 900.0         # J/(kg K)   LITERATURE  aluminium
 headspace = 0.012             # m          MEASURE     from the top of the can's rim down to the drink's
                               #                        surface inside.  The wall above it and the lid have
                               #                        gas behind them and pass little heat.  About 1.2 cm
                               #                        for a 330 ml can; 0 = brim full, the lid passes heat
-held_down = true              # -          MODEL       true: the can stands at base_height (a holder).
+orientation = "on its side"   # -          MODEL       how the can sits in the bath: "on its side" (lying
+                              #                        along the tank, as in the rig) or "upright".  An upside
+                              #                        down can behaves as an upright one (the gas is still at
+                              #                        the top)
+held_down = true              # -          MODEL       true: the can is held at base_height (a holder).
                               #                        false: it floats -- a full can (~0.9 kg/L) only
                               #                        sinks into brine (1.18 kg/L) part of the way
 
@@ -133,6 +137,10 @@ outside_h = 270.0             # W/(m^2 K)  ASSUMED     brine side, chosen so U ~
                               #                        whole can (310 cm^2, lid included) passed heat
 reference_dT = 25.0           # K          LITERATURE  the drink-to-brine difference the two h values
                               #                        apply at
+on_side_factor = 1.2          # -          LITERATURE  both h values are for an upright can; lying on its
+                              #                        side, free convection is this much stronger (the
+                              #                        diameter sets it, not the height: Churchill & Chu
+                              #                        1975 give 1.15-1.33 for this can)
 inside_power_law = true       # -          MODEL       true: the drink-side h follows free convection,
                               #                        h = inside_h * (dT / reference_dT)^(1/4).
                               #                        false: inside_h at every dT

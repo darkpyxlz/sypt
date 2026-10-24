@@ -108,10 +108,11 @@
     can warms first and its ice melts first, as the tank picture shows. The styrofoam box is not a perfect
     insulator: heat from the room leaks in through its walls, its floor (the tank stands on it), its lid and the
     gaps around the lid, about 0.34 W/K in all, and every run says how much came in from the room and how
-    much from the drink. The energy bookkeeping line only checks that every joule is accounted for. Each
-    wetted area follows the liquid level: the glass up to the surface, the ice below it, and the can wherever
-    there is liquid on both sides of its wall (not its lid, which has gas behind it). The can is lowered in over
-    10 seconds, so the level rises smoothly as it goes under. The
+    much from the drink. The energy bookkeeping line only checks that every joule is accounted for. The can
+    lies on its side, as in the rig, drawn to scale (it can be stood upright instead). Each wetted area follows
+    the liquid level: the glass up to the surface, the ice below it, and the can wherever there is liquid on both
+    sides of its wall (not the strip along its top where its gas is). The can is lowered in over 10 seconds, so
+    the level rises smoothly as it goes under. The
     drink can freeze, gradually, as its sugar concentrates. The page loads
     <a href="https://pyodide.org">Pyodide</a> (Python compiled for the browser), copies in the model files
     unchanged, and runs them on your computer. Nothing is sent anywhere.</p>
@@ -124,7 +125,7 @@
     so you can send a scenario to someone else.</p>
   <p>What matters most for the time to 5 °C is the heat transfer across the can: fit a drink run against a
     brine probe within about 5 mm of the can and enter the measured U. A second probe out in the bath measures
-    the convection factor: the default puts the brine next to the can about 5 K above the rest. For the bath
+    the convection factor: the default puts the brine next to the can about 6 K above the rest. For the bath
     temperature, it is the ice and salt rates: a 15-minute run with no drink pins them, and tells "bulk" from
     "salt-limited" ice surfaces. For how fast the bath warms, it is the box's leak: start from
     <code>box_test.toml</code>, log 5 kg of cold water in the closed box for 3 hours, and move <em>box leak,
