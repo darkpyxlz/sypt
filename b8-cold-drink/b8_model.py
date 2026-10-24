@@ -241,6 +241,10 @@ def check_inputs(p):
     for key in ('gaps_leak', 'measured_UA'):
         if not 0 <= getattr(p.box, key) < math.inf:
             raise ValueError(f"[box] {key} must be 0 or more")
+    if not 0 <= p.drink.lowering_time < math.inf:
+        raise ValueError("[drink] lowering_time must be 0 or more")
+    if not 0 <= p.can.headspace < p.can.height:
+        raise ValueError("[can] headspace must be at least 0 and less than the can's height")
 
 
 def solve(f, lo, hi, tol=1e-12):
@@ -674,36 +678,49 @@ class Experiment:
         the floor; the can, once in, raises the level by the volume of whatever part
         of it is below the surface.
 
-        With [can] held_down the can stands at base_height whatever happens.  Without
-        it the can floats: a full can (density about 0.9) sinks into brine (1.18)
-        only until it displaces its own weight."""
+        The can does not appear in the bath at once: it is pushed down from the
+        surface to where it comes to rest over [drink] lowering_time, so the level
+        rises smoothly as it goes under.  With [can] held_down it comes to rest at
+        base_height.  Without it the can floats: a full can (density about 0.9) sinks
+        into brine (1.18) only until it displaces its own weight."""
         c = self.p.can
         V_liquid = (s.water + s.dissolved) / self.brine_density(w) + s.crystals / self.p.materials.salt_density
         level, wet, bottom, top = self.ice_bed(s.ice, V_liquid, w)
-        base = c.base_height
-        if drink_in and not c.held_down:
+        if not drink_in:
+            return level, 0.0, c.base_height, wet, bottom, top
+        # where the can comes to rest (its bottom, m)
+        rest = c.base_height
+        if not c.held_down:
             depth = self.can_mass / (self.brine_density(w) * math.pi * (c.diameter / 2) ** 2)
             if depth < c.height and level >= depth * (1 - self.can_ratio):     # it floats
-                level += self.can_ratio * depth
-                return level, depth / c.height, level - depth, wet, bottom, top
-            base = 0.0                                                         # it sits on the floor
-        if not drink_in or level <= base:
-            return level, 0.0, base, wet, bottom, top
-        # level = level without the can + can_ratio * (part of the can below the surface)
-        level_partly = (level - self.can_ratio * base) / (1 - self.can_ratio)
-        if level_partly < base + c.height:
-            return level_partly, (level_partly - base) / c.height, base, wet, bottom, top
-        return level + self.can_ratio * c.height, 1.0, base, wet, bottom, top
+                rest = level - depth * (1 - self.can_ratio)
+            else:
+                rest = 0.0                                                     # it sits on the floor
+        # where it is now: on its way down from the surface
+        lowering = self.p.drink.lowering_time
+        done = 1.0 if lowering <= 0 else min((s.t - self.p.drink.goes_in_at) / lowering, 1.0)
+        start = max(level, rest)
+        can_bottom = start + (rest - start) * done
+        # the part under the surface, d, raises the level by can_ratio * d
+        under = min(max((level - can_bottom) / (1 - self.can_ratio), 0.0), c.height)
+        return level + self.can_ratio * under, under / c.height, can_bottom, wet, bottom, top
 
     # =========================================================================
     # 3e. Heat and mass transfer
     # =========================================================================
     def can_area(self, submerged):
-        """Outside of the can touching the brine, m^2.  The bottom is always wet;
-        the top only once the whole can is under."""
-        r = self.p.can.diameter / 2
-        top = math.pi * r * r if submerged >= 1.0 else 0.0
-        return 2 * math.pi * r * self.p.can.height * submerged + math.pi * r * r + top
+        """Can wall that passes heat from the drink to the brine, m^2, with `submerged`
+        the fraction of the can's height under the brine.  Heat crosses the wall only
+        where there is liquid on both sides: the bottom, and the side up to the lower
+        of the two surfaces, the brine's outside and the drink's inside ([can]
+        headspace below the top).  The lid and the wall above the drink have gas
+        behind them and pass little heat; only a brim-full can (headspace 0) passes
+        heat through its lid, once the lid is under."""
+        c = self.p.can
+        r = c.diameter / 2
+        wet_side = min(submerged * c.height, c.height - c.headspace)
+        lid = math.pi * r * r if c.headspace == 0 and submerged >= 1.0 else 0.0
+        return math.pi * r * r + 2 * math.pi * r * wet_side + lid
 
     def can_U(self, dT):
         """Drink -> brine, W/(m^2 K): two films in series (the aluminium wall is negligible),

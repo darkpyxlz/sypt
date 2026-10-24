@@ -145,7 +145,24 @@ check('box test: energy conserved, and no drink', abs(r_box.energy_error) < 1e-3
 check('box test: a log fit of the water temperature gives back the leak', abs(fitted - ex_box.box_UA) < 0.03 * ex_box.box_UA,
       f"({fitted:.3f} against {ex_box.box_UA:.3f} W/K)")
 
-# --- 6. Phase diagram -----------------------------------------------------------
+# --- 6. The liquid level and the areas that follow it -------------------------------
+jumps = [abs(b.level - a.level) for a, b in zip(r_def.history, r_def.history[1:])]
+check('the liquid level never jumps (the can is lowered in)', max(jumps) < 1e-3,
+      f"(largest change in one step {100 * max(jumps):.3f} cm)")
+lowered = r_def.at(base.drink.goes_in_at + base.drink.lowering_time + 1)
+check('once down, the can stands on its holder', abs(lowered.can_base - base.can.base_height) < 1e-12
+      and lowered.submerged == 1.0)
+can = base.can
+steps = [ex.can_area(i / 1000) for i in range(1001)]
+side_step = 2 * 3.141592653589793 * can.diameter / 2 * can.height / 1000
+check("the can's heat-passing area changes smoothly with the brine level",
+      max(b - a for a, b in zip(steps, steps[1:])) <= side_step * (1 + 1e-9) and min(b - a for a, b in zip(steps, steps[1:])) >= 0)
+r_can = can.diameter / 2
+check('a submerged can passes heat through its bottom and its side up to the drink',
+      abs(ex.can_area(1.0) - 3.141592653589793 * r_can * (r_can + 2 * (can.height - can.headspace))) < 1e-12,
+      f"({1e4 * ex.can_area(1.0):.1f} cm2)")
+
+# --- 7. Phase diagram -----------------------------------------------------------
 ex = Experiment(base)
 worst = max(abs(ex.freezing_point(ex.bodnar_w(x)) + x) for x in [0.5 * i for i in range(1, 42)])
 check('freezing_point() inverts Bodnar', worst < 1e-9, f"(worst {worst:.1e} K)")
@@ -153,7 +170,7 @@ gap = abs(ex.halite_saturation_w(base.phase_diagram.peritectic_temperature) - ba
 check('halite line meets the peritectic', gap < 1e-4, f"(gap {gap:.1e})")
 check('no salt: the bath stays at or above 0 C', min(results['no salt'].series('T_brine')) > -1e-6)
 
-# --- 7. The drink freezing --------------------------------------------------------
+# --- 8. The drink freezing --------------------------------------------------------
 d = base.drink
 frozen = [s for s in results['inputs.toml'].history if s.drink_frozen > 0]
 check('drink freezes once below its freezing point', len(frozen) > 0)
@@ -166,7 +183,7 @@ check('supercooled drink stays liquid, then warms when ice appears',
       coldest_liquid < d.freezing_point - 5.9 and first_ice.T_drink > coldest_liquid + 3,
       f"(liquid down to {coldest_liquid:.1f} C, {first_ice.T_drink:.1f} C once ice appears)")
 
-# --- 8. Inputs files --------------------------------------------------------------
+# --- 9. Inputs files --------------------------------------------------------------
 with tempfile.TemporaryDirectory() as tmp:
     short = Path(tmp) / 'short.toml'
     short.write_text('[bath_typo]\nmass = 1\n')

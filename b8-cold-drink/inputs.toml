@@ -96,7 +96,11 @@ dissolves_as = "halite"       # -          MODEL       which solid the grain sur
 mass = 0.330                  # kg         MEASURE     weigh the full can, then the empty can
 heat_capacity = 4000.0        # J/(kg K)   ASSUMED     sugary soft drink; 4180 for water or a diet drink
 start_temperature = 28.0      # degC       MEASURE
-goes_in_at = 900.0            # s          CHOICE      let the bath and tank settle this long first
+goes_in_at = 900.0            # s          CHOICE      let the bath and tank settle this long first.
+                              #                        inf = no drink (the box test)
+lowering_time = 10.0          # s          MEASURE     how long pushing the can down through the ice to
+                              #                        its holder takes; the level rises as it goes under.
+                              #                        0 = it drops in at once
 freezes = true                # -          MODEL       false: the drink stays liquid however cold it gets
 freezing_point = -0.9         # degC       MEASURE     where ice first forms; about -0.6 from 10 % sugar
                               #                        plus ~-0.3 from the CO2.  Diet drinks about -0.3
@@ -112,6 +116,10 @@ height = 0.1166               # m          MEASURED    20 Oct
 base_height = 0.010           # m          RIG NOTE    can bottom above the tank floor
 mass = 0.013                  # kg         MEASURE     weigh the empty can; a 330 ml can is ~10-13 g
 heat_capacity = 900.0         # J/(kg K)   LITERATURE  aluminium
+headspace = 0.012             # m          MEASURE     from the top of the can's rim down to the drink's
+                              #                        surface inside.  The wall above it and the lid have
+                              #                        gas behind them and pass little heat.  About 1.2 cm
+                              #                        for a 330 ml can; 0 = brim full, the lid passes heat
 held_down = true              # -          MODEL       true: the can stands at base_height (a holder).
                               #                        false: it floats -- a full can (~0.9 kg/L) only
                               #                        sinks into brine (1.18 kg/L) part of the way
@@ -121,7 +129,8 @@ held_down = true              # -          MODEL       true: the can stands at b
 inside_h = 400.0              # W/(m^2 K)  LITERATURE  drink side, unstirred (Chem. Eng. Educ. bottle study),
                               #                        at a 25 K drink-to-brine difference
 outside_h = 270.0             # W/(m^2 K)  ASSUMED     brine side, chosen so U ~ 160 (SINTEF tau ~ 265 s)
-                              #                        when the bath was taken as perfectly mixed
+                              #                        when the bath was taken as perfectly mixed and the
+                              #                        whole can (310 cm^2, lid included) passed heat
 reference_dT = 25.0           # K          LITERATURE  the drink-to-brine difference the two h values
                               #                        apply at
 inside_power_law = true       # -          MODEL       true: the drink-side h follows free convection,

@@ -19,6 +19,10 @@ dissolves_as = "hydrohalite"
 
 [drink]
 freezes = false
+lowering_time = 0.0           # the can dropped in at once
+
+[can]
+headspace = 0.0               # and its lid passed heat once under
 
 [can_heat_transfer]
 inside_power_law = false

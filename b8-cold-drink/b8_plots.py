@@ -178,6 +178,10 @@ class TankView:
                                        2 * k * self.can_r, k * self.can_h,
                                        boxstyle='round,pad=0,rounding_size=0.5',
                                        facecolor=colour(s.T_drink), edgecolor='none', zorder=4.1))
+        gas = 100 * ex.p.can.headspace                   # the gas above the drink: no heat through it
+        if gas > 0:
+            self._patch(Rectangle((x0 + 0.25, y0 + self.can_h - gas), 2 * self.can_r - 0.5, gas - 0.25,
+                                  facecolor=AIR, edgecolor='none', alpha=alpha, zorder=4.2))
         frozen = f"\n{100 * s.drink_frozen:.0f} % frozen" if s.drink_frozen > 0 else ''
         t_in = ex.p.drink.goes_in_at
         waiting = '' if s.drink_in else f"\nin at {mmss(t_in)}" if t_in < float('inf') else "\nnot in this run"

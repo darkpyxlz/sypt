@@ -29,7 +29,8 @@ def print_run(ex, result):
           f"walls+base {ex.UA_walls:.3f}, lid {ex.UA_lid:.3f}, gaps {ex.UA_gaps:.3f}; "
           f"foam holds {ex.box['walls'].C + ex.box['lid'].C:.0f} J/K")
     print(f"tank glass {ex.tank_C / p.tank.glass_heat_capacity:.2f} kg (C = {ex.tank_C:.0f} J/K), "
-          f"drink C = {ex.drink_C:.0f} J/K")
+          f"drink C = {ex.drink_C:.0f} J/K, the can passes heat through {1e4 * ex.can_area(1.0):.0f} cm^2 "
+          f"once under (bottom and side up to the drink)")
     print(f"ice surface {ex.ice_area(p.ice.mass, 1.0):.2f} m^2 when fully wet, "
           f"salt surface {ex.crystal_area(p.salt.mass):.1f} m^2")
     for w in result.warnings:

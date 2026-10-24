@@ -649,6 +649,11 @@ function drawTank() {
     ctx.fillStyle = tempColour(at('T_drink'));
     ctx.fill();
   }
+  const gas = 100 * num(p.can.headspace);               // the gas above the drink: no heat through it
+  if (gas > 0) {
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(X(cx - r + 0.25), Y(cy + canH - 0.25), (2 * r - 0.5) * k, (gas - 0.25) * k);
+  }
   ctx.beginPath();
   ctx.roundRect(X(cx - r), Y(cy + canH), 2 * r * k, canH * k, 0.8 * k);
   ctx.strokeStyle = '#475569';
