@@ -1,0 +1,27 @@
+name: B8 check
+
+on: push
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    defaults:
+      run:
+        shell: bash
+        working-directory: b8-cold-drink
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install requirements
+        run: pip install -r requirements.txt
+      - name: Run b8_simple.py
+        run: |
+          out="$(python3 b8_simple.py)"
+          echo "$out"
+          grep -q "drink reaches 5 C" <<< "$out"
+      - name: Run b8_sim.py --quick
+        run: python3 b8_sim.py --quick
