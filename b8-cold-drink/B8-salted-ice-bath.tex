@@ -167,11 +167,11 @@ The rig is a can of drink standing (or lying) in a glass tank, inside a styrofoa
 a room at $T_{\text{room}} = 28\dC$. The tank holds the bath: liquid \emph{brine} (water with salt
 dissolved in it), crushed \emph{ice}, and undissolved \emph{salt crystals} on the floor. Each part
 holds heat and passes it to its neighbours:
-\[
+\begin{gather*}
 \text{room} \to \text{foam} \to \text{glass} \to \text{brine},\qquad
-\text{room} \to \text{foam lid} \to \text{air} \to \text{brine},\qquad
+\text{room} \to \text{foam lid} \to \text{air} \to \text{brine},\\
 \text{drink} \to \text{can wall} \to \text{brine} \to \text{ice}.
-\]
+\end{gather*}
 Two quantities are conserved in every part and every exchange: energy and mass. Everything that
 follows is these two conservation laws, written for each part, together with the laws that say how
 fast energy and mass move between parts.
@@ -227,8 +227,8 @@ salt at 0\,°C have zero enthalpy.} Then, for each kilogram, from \eqref{eq:dH} 
 \paragraph{Liquid water} Warming from 0\,°C to $T$ at constant pressure takes $c_w T$, with $c_w$ the
 specific heat capacity (J\,kg$^{-1}$K$^{-1}$): $h_w(T) = c_w T$.
 
-\paragraph{Ice} Start from the reference (liquid at 0\,°C), freeze it, which releases the latent
-heat $L_0 = 333.55$\,kJ\,kg$^{-1}$, then cool the ice to $T$:
+\paragraph{Ice} Start from the reference, liquid water at 0\,°C. Freezing it releases the latent
+heat, $L_0 = 333.55$\,kJ per kg; cooling the ice to $T$ then takes out $\int c_i\,\mathrm dT$:
 \begin{equation}
 h_i(T) = -L_0 + \int_0^T c_i(T')\,\mathrm dT' \;\approx\; c_i T - L_0 .
 \label{eq:hice}
@@ -348,9 +348,9 @@ w_L(T) = 0.0178\,\theta - 4.42\times10^{-4}\,\theta^2 + 5.572\times10^{-6}\,\the
 \qquad 0 \le \theta \le 21.2 .
 \label{eq:bodnar}
 \end{equation}
-\where Experiment, with a check from \eqref{eq:blagden}: for dilute brine \eqref{eq:blagden} gives
-$w \approx M_{\text{NaCl}}\,\theta/(i K_f) = 0.0157\,\theta$, close to the leading term of the fit; the
-higher terms carry the non-ideality. The ratio of Blagden's depression to the measured one is 1.106,
+\where Experiment, with a check from \eqref{eq:blagden}. For dilute brine, \eqref{eq:blagden} gives
+$w \approx 0.0157\,\theta$, since $M_{\text{NaCl}}/(i K_f) = 0.0157$\,K$^{-1}$: close to the leading
+term of the fit. The higher terms carry the non-ideality. The ratio of Blagden's depression to the measured one is 1.106,
 1.069, 1.019, 0.952 and 0.909 at 5, 10, 15, 20 and 23\,wt\,\% (Fig.~\ref{fig:liq}). The fit is explicit
 in $T$, which makes the equilibrium solve fast; the simulator inverts it by Newton's method when it
 needs $T$ from $w$.
@@ -555,11 +555,13 @@ simulator follows $h = h_{\text{ref}}(\Delta T/\Delta T_0)^{1/4}$ with $\Delta T
 from the scaling alone.
 \holds For laminar boundary layers, $\mathrm{Ra} \lesssim 10^9$: here $\mathrm{Ra}$ is $10^7$–$10^8$.
 
-The scaling fixes the exponents; the constants come from experiment. Churchill \& Chu (1975) fitted
-\[
-\mathrm{Nu}_{\mathcal L} = 0.68 + \frac{0.670\,\mathrm{Ra}^{1/4}}{[1 + (0.492/\mathrm{Pr})^{9/16}]^{4/9}}\ \ \text{(vertical)},\qquad
-\mathrm{Nu}_D = \left\{0.60 + \frac{0.387\,\mathrm{Ra}_D^{1/6}}{[1 + (0.559/\mathrm{Pr})^{9/16}]^{8/27}}\right\}^2\ \ \text{(horizontal cylinder)}.
-\]
+The scaling fixes the exponents; the constants come from experiment. Churchill \& Chu (1975) fitted,
+for a vertical wall of height $\mathcal L$ and a horizontal cylinder of diameter $D$,
+\begin{gather*}
+\mathrm{Nu}_{\mathcal L} = 0.68 + \frac{0.670\,\mathrm{Ra}^{1/4}}{[1 + (0.492/\mathrm{Pr})^{9/16}]^{4/9}},
+\qquad
+\mathrm{Nu}_D = \left\{0.60 + \frac{0.387\,\mathrm{Ra}_D^{1/6}}{[1 + (0.559/\mathrm{Pr})^{9/16}]^{8/27}}\right\}^2 .
+\end{gather*}
 For brine at $-15\dC$ on Can~2 these give $h = 240$–$358$\,W\,m$^{-2}$K$^{-1}$ upright and 280–457 lying
 down, for a 5–25\,K difference: a film 1.5–2.2\,mm thick, and a ratio of 1.17–1.28 between the two
 orientations (1.15–1.33 for the drink inside). The simulator takes the brine-side
@@ -723,12 +725,12 @@ on the way. Energy conservation \eqref{eq:heateq} with this sink, in one dimensi
 k_{\text{eff}}\,\frac{\mathrm d^2T}{\mathrm dx^2} = h_{bi}a_v\,(T - T_s)
 \;\Longrightarrow\;
 T - T_s \propto e^{-x/\ell},\qquad
-\ell = \sqrt{\frac{k_{\text{eff}}}{h_{bi}\,a_v}} = 0.6\ \text{cm (still brine)},\ 2.8\ \text{cm}\ (k_{\text{eff}} = 20\,k_b).
+\ell = \sqrt{\frac{k_{\text{eff}}}{h_{bi}\,a_v}} .
 \label{eq:pen}
 \end{equation}
 \where Conduction in, absorption by melting out: the temperature excess decays exponentially over the
-\emph{penetration length} $\ell$. Most of the drink's heat is absorbed within a few centimetres of the
-can.
+\emph{penetration length} $\ell$, 0.6\,cm for still brine and 2.8\,cm for $k_{\text{eff}} = 20\,k_b$. Most
+of the drink's heat is absorbed within a few centimetres of the can.
 
 \subsection{The ice bed conducts and convects}
 \label{sec:convfactor}
@@ -997,7 +999,7 @@ as well. Water and salt are conserved to $10^{-9}$\,kg.
 
 \subsection{Blagden's law against the data}
 \FLOOR. Blagden's law \eqref{eq:blagden}, as coded in \code{temp()}, crosses Bodnar's liquidus
-\eqref{eq:bodnar} at \textbf{16.5\,wt\,\% / $-12.61\dC$}, the dossier's value to rounding. The ratio of
+\eqref{eq:bodnar} at \textbf{16.5\,wt\,\%} and $\mathbf{-12.61\dC}$, the dossier's value to rounding. The ratio of
 ideal to measured depression is 1.106, 1.069, 1.019, 0.952, 0.909 at 5, 10, 15, 20, 23\,wt\,\%
 (Fig.~\ref{fig:liq}). The crossing belongs to the linear approximation: keeping $\ln(1-x)$ in
 \eqref{eq:lnaw} instead of $-x$ moves it near 12\,wt\,\%.
@@ -1246,8 +1248,8 @@ bath with the dissolution law \eqref{eq:dissolve} written as
 \dot s = k\,(S-s)^{2/3}\,S^{1/3}\,\frac{w_{\text{sat}}(T_b) - w}{w_{\text{sat}}(T_b)},
 \label{eq:kin}
 \end{equation}
-\where \eqref{eq:dissolve} with the grain area proportional to the salt put in, $A_{s0} \propto S$:
-$k = k_d\rho_b w_{\text{sat}}A_{s0}/S$ (s$^{-1}$) gathers the constants. Whatever $k$ is,
+\where This is \eqref{eq:dissolve} with the grain area proportional to the salt put in. The rate
+constant $k = k_d\,\rho_b\,w_{\text{sat}}\,A_{s0}/S$, in s$^{-1}$, gathers the constants. Whatever $k$ is,
 \textbf{this law makes the one-shot bath faster than the staged one} (Fig.~\ref{fig:kin}): at 10\,min,
 $-12.3$ against $-9.0\dC$ at $k = 2\times10^{-3}$\,s$^{-1}$, because the one-shot bath has more crystal
 area exposed from the start. The bulk brine at $-7.5\dC$ is only 11\,wt\,\% against a saturation of
@@ -1336,8 +1338,9 @@ $c_b \mp 0.2$ & $-0.08$ / $+0.08$\,K & $+13.9$ / $-14.4$\,g & $-0.25$ / $+0.24$\
 \end{center}
 
 \subsection{Numerics}
-Against a constant bath the equilibrium model's integrator reproduces $t_{5\,°\text C}$ from
-\eqref{eq:scales} to 0.01\,s (169.07\,s both) and the power-law closed form to 0.01\,s (154.61\,s both).
+Against a constant bath the equilibrium model's integrator reproduces the time to 5\,°C of
+\eqref{eq:scales} to 0.01\,s (169.07\,s both), and that of the power-law closed form to 0.01\,s
+(154.61\,s both).
 Quartering the step changes $t_{5\,°\text C}$ by $10^{-3}$\,s. The heat released by the drink and the time
 integral of the flux agree to $10^{-3}$\,kJ in 65.44\,kJ. The simulator closes its energy bookkeeping to
 $10^{-9}$\,J (§\ref{sec:numerics}).
