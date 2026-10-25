@@ -1,0 +1,719 @@
+% B8 · Cold drink — model derivation, step by step
+% Compile: pdflatex B8-model-derivation.tex (twice). Overleaf-ready, standard packages only.
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs,tabularx,array,longtable}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{accentA}{HTML}{1F5FA8}   % cold / bath
+\definecolor{accentB}{HTML}{C2410C}   % warm / drink
+\definecolor{ink}{HTML}{1E293B}
+
+\newtcolorbox{result}[1]{enhanced,breakable,colback=accentA!5,colframe=accentA!70,
+  boxrule=0.6pt,arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,
+  fonttitle=\bfseries\small,coltitle=white,title={#1}}
+\newtcolorbox{assume}{enhanced,breakable,colback=accentB!5,colframe=accentB!60,
+  boxrule=0.5pt,arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Hb}{\mathcal{H}}
+\newcommand{\Qdb}{\dot Q_{db}}
+\newcommand{\Tliq}{T_{\mathrm{liq}}}
+\newcommand{\wsat}{w_{\mathrm{sat}}}
+\newcommand{\Leff}{L_{\mathrm{eff}}}
+\newcommand{\Ceff}{C_{\mathrm{eff}}}
+\newcommand{\UAbox}{UA_{\mathrm{box}}}
+\newcommand{\Tenv}{T_{\mathrm{env}}}
+\newcommand{\Pst}{P_{\mathrm{stir}}}
+\newcommand{\Tabs}{\mathcal{T}}
+\newcommand{\step}[1]{\section*{#1}\addcontentsline{toc}{section}{#1}}
+\newcommand{\sub}[1]{\par\smallskip\noindent\textbf{#1}\enspace}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+
+\title{\textbf{B8 · Cold drink}\\[2pt]\large Model derivation, step by step}
+\author{darkpyxlz · SYPT 2027}
+\date{25 October 2026}
+
+\begin{document}
+\maketitle
+\vspace{-1em}
+
+\begin{center}
+\begin{minipage}{0.88\linewidth}\small
+The current model is two coupled lumped systems --- the drink, described by its temperature $T_d$,
+and the bath, described by its total enthalpy $\Hb$ --- joined by one heat flow, $UA(T_d - T_b)$.
+This document derives both equations from conservation laws and closes them with phase equilibrium
+and convection correlations. No numbers are substituted; every result is left in symbols.
+Step~13 collects every result into the closed equation set.
+\end{minipage}
+\end{center}
+
+\tableofcontents
+
+% ---------------------------------------------------------------
+\step{Scope and conventions}
+
+\textbf{What ``current model'' means.} The 24 Oct salted-ice-bath model: lumped drink,
+enthalpy-based bath with a regime map (liquid / liquidus / eutectic plateau / saturated / solid),
+Bodnar liquidus, box leak and stirrer power, with the $\Delta T^{1/4}$ convection law as a switchable
+option. The buffered eutectic bath (COMSOL v1) falls out as a special case.
+
+\textbf{How to read it.} Each step states its assumptions, derives, and ends in a boxed
+\textbf{Result}. Step 13 collects every Result into the closed equation set; Step 14 gives the
+special cases with closed-form solutions.
+
+\textbf{Conventions.}
+\begin{itemize}
+  \item Bath and drink temperatures are in $^\circ$C, because the Bodnar liquidus and the enthalpy
+        reference are defined at $0\,^\circ$C. Absolute temperature (K) appears only in the
+        phase-equilibrium derivation (Step 6), written $\Tabs$.
+  \item Salt content $w$ is a mass fraction (0--1). Bodnar's fit is in wt\,\%, so it is written with $W = 100w$.
+  \item A heat flow is positive in the direction its subscript names: $\Qdb$ flows drink $\to$ bath,
+        $\dot Q_{\mathrm{leak}}$ flows environment $\to$ bath.
+  \item Enthalpy reference state: pure liquid water and solid NaCl, both at $0\,^\circ$C, have zero enthalpy.
+\end{itemize}
+
+% ---------------------------------------------------------------
+\step{Nomenclature}
+
+Source column: \textbf{M} measured on this rig, \textbf{T} tabulated / literature,
+\textbf{D} derived here, \textbf{S} state variable.
+
+{\small
+\begin{longtable}{>{$}l<{$} p{8.2cm} l l}
+\toprule
+\text{Symbol} & Meaning & Unit & Src \\
+\midrule
+\endhead
+T_d & drink temperature (well-mixed core) & $^\circ$C & S \\
+T_b & bath temperature & $^\circ$C & D (from $\Hb$) \\
+\Tenv & ambient air outside the box & $^\circ$C & M \\
+\theta & drink--bath difference, $T_d - T_b$ & K & D \\
+m_d,\ c_d & drink mass, specific heat & kg, J\,kg$^{-1}$K$^{-1}$ & M, T \\
+m_c,\ c_c & container mass, specific heat & kg, J\,kg$^{-1}$K$^{-1}$ & M, T \\
+C_d & drink + container heat capacity & J\,K$^{-1}$ & D \\
+k_d,\rho_d,\nu,\alpha,\beta & drink conductivity, density, kinematic viscosity, diffusivity, expansion coefficient & SI & T \\
+r_i,\ r_o,\ H & container inner radius, outer radius, height & m & M \\
+t_w,\ k_w & wall thickness, wall conductivity & m, W\,m$^{-1}$K$^{-1}$ & M, T \\
+A_i,\ A_o & inner and outer wetted areas & m$^2$ & M \\
+h_i,\ h_o & drink-side and bath-side film coefficients & W\,m$^{-2}$K$^{-1}$ & D/M \\
+R_i,R_w,R_o,R_c & inner film, wall, outer film, contact (label) resistances & K\,W$^{-1}$ & D \\
+U,\ UA & overall coefficient, conductance & W\,m$^{-2}$K$^{-1}$, W\,K$^{-1}$ & M (fit) \\
+\mathrm{Bi,Nu,Ra,Re,Pr} & Biot, Nusselt, Rayleigh, Reynolds, Prandtl numbers & --- & D \\
+\Hb & total bath enthalpy & J & S \\
+m_W,\ m_S & total water (ice + liquid), total NaCl & kg & M \\
+m_i,\ m_l,\ m_h & ice, brine, undissolved solid salt & kg & D \\
+w,\ \bar w & brine salt fraction; overall fraction $m_S/(m_W+m_S)$ & --- & D \\
+\Tliq(w) & liquidus (ice--brine coexistence) temperature & $^\circ$C & T/M \\
+\wsat(T) & salt solubility curve & --- & T \\
+T_E,\ w_E & eutectic temperature and composition & $^\circ$C, --- & T \\
+b_1,b_2,b_3 & Bodnar (1993) coefficients: $1.78,\ -0.0442,\ 5.572\times10^{-4}$ & --- & T \\
+c_i,c_b,c_h,c_w & specific heats of ice, brine, solid NaCl, water & J\,kg$^{-1}$K$^{-1}$ & T \\
+L_f & latent heat of fusion of ice at $0\,^\circ$C & J\,kg$^{-1}$ & T \\
+\Delta h_s & enthalpy of solution per kg NaCl ($>0$ endothermic) & J\,kg$^{-1}$ & T \\
+\Leff,\ \Ceff & effective latent heat; effective bath heat capacity & J\,kg$^{-1}$, J\,K$^{-1}$ & D \\
+\Lambda_E & enthalpy to form 1 kg of eutectic brine from ice + salt & J\,kg$^{-1}$ & D \\
+\UAbox & box (EPS) conductance & W\,K$^{-1}$ & M \\
+\Pst & stirrer power dissipated in the bath & W & M \\
+\Tabs,\ \Tabs_0 & absolute temperature; 273.15 K & K & --- \\
+M_{\mathrm{H_2O}},\ M_{\mathrm{NaCl}} & molar masses & kg\,mol$^{-1}$ & T \\
+\Delta h_{\mathrm{fus}} & molar enthalpy of fusion of ice & J\,mol$^{-1}$ & T \\
+a_w,\ \varphi,\ \nu_i & water activity, osmotic coefficient, ions per formula unit (2) & --- & T \\
+b,\ K_f & molality; cryoscopic constant & mol\,kg$^{-1}$, K\,kg\,mol$^{-1}$ & D \\
+\tau,\ \tau_0,\ t^* & time constants & s & D \\
+n,\ a & exponent and prefactor in $\dot Q = a\theta^n$ & ---, W\,K$^{-n}$ & D/M \\
+T_{fd} & freezing point of the drink & $^\circ$C & T/M \\
+\bottomrule
+\end{longtable}}
+
+% ---------------------------------------------------------------
+\step{Step 0 --- System, control volumes and assumptions}
+
+The apparatus splits into two systems with heat capacity --- the drink and the bath --- and two
+treated as pure resistances --- the container wall and the box. Everything outside the box is a
+reservoir at $\Tenv$.
+
+{\small
+\begin{tabularx}{\linewidth}{l X l X}
+\toprule
+Control volume & Contents & State & Exchanges heat with \\
+\midrule
+Drink (D) & liquid + container shell & $T_d$ & bath, through the wall \\
+Bath (B) & ice, brine, undissolved NaCl & $\Hb$ & drink; environment via box; stirrer work \\
+Container wall & Al or PET shell, label & --- & resistance only \\
+Box & EPS walls + lid & --- & resistance only \\
+\bottomrule
+\end{tabularx}}
+
+\medskip
+\textbf{Thermal circuit.}
+\[
+\underbrace{T_d}_{C_d}
+\;\xrightarrow{\;R_i\;}\; T_{wi}
+\;\xrightarrow{\;R_c+R_w\;}\; T_{wo}
+\;\xrightarrow{\;R_o\;}\;
+\underbrace{T_b}_{\Hb}
+\;\xleftarrow{\;1/\UAbox\;}\; \Tenv,
+\qquad \Pst \to \text{bath}
+\]
+
+\begin{assume}
+\textbf{Assumptions.}
+\begin{enumerate}[label=\textbf{A\arabic*}]
+\item \textbf{Drink well-mixed.} One temperature $T_d$ describes the liquid core; all variation sits in thin boundary layers. Tested in Step 3.
+\item \textbf{Wall and tank have negligible heat capacity}, or theirs is added to the system they touch (container into $C_d$; tank glass adds $C_tT_b$ to $\Hb$).
+\item \textbf{Bath well-mixed and at local phase equilibrium at every instant.}
+\item \textbf{Quasi-steady resistances.} Boundary layers respond faster than $T_d$ or $T_b$ change.
+\item \textbf{Constant pressure, lid on.} No evaporation, condensation or frost; radiation absorbed into $\UAbox$.
+\item \textbf{Constant properties}, except $h_i$ and $\beta$ (Step 5).
+\item \textbf{No hydrohalite, no metastability.} The salt-rich solid is anhydrous NaCl, the eutectic is the equilibrium $T_E$, nothing supercools.
+\item \textbf{Drink fully immersed} to a marked waterline: wetted area fixed.
+\item \textbf{Ideal sensors.} Probe lag and offsets are measurement corrections, not model terms.
+\end{enumerate}
+\end{assume}
+
+% ---------------------------------------------------------------
+\step{Step 1 --- First law for the drink}
+
+The drink plus container is a closed system at constant pressure doing no work, so
+$\dd H_D/\dd t = $ heat in $= -\Qdb$. With constant specific heats (A6) and one temperature (A1),
+\[
+H_D = (m_d c_d + m_c c_c)(T_d - T_{\mathrm{ref}})
+\quad\Rightarrow\quad
+\frac{\dd H_D}{\dd t} = (m_d c_d + m_c c_c)\frac{\dd T_d}{\dd t} \equiv C_d\frac{\dd T_d}{\dd t}.
+\]
+
+\begin{result}{Result 1 --- drink energy balance}
+\[ C_d\,\frac{\dd T_d}{\dd t} = -\Qdb, \qquad C_d = m_d c_d + m_c c_c \]
+\end{result}
+$m_d$ comes from weighing the drink full and empty, not from the external volume $\pi r_o^2 H$, which includes headspace.
+
+% ---------------------------------------------------------------
+\step{Step 2 --- Heat path drink $\to$ bath as series resistances}
+
+\sub{2.1 Each layer carries the same heat flow} (A4):
+\[ \Qdb = \frac{T_d - T_{wi}}{R_i} = \frac{T_{wi}-T_{wo}}{R_w} = \frac{T_{wo}-T_b}{R_o}. \]
+
+\sub{2.2 Film resistances} from Newton's law, $\dot Q = hA\,\Delta T$:
+\[ R_i = \frac{1}{h_iA_i}, \qquad R_o = \frac{1}{h_oA_o}. \]
+
+\sub{2.3 Wall resistance of a cylinder.} Fourier's law through a shell of height $H$, $\dot Q$ the same at every $r$:
+\[
+\dot Q = -k_w(2\pi rH)\frac{\dd T}{\dd r}
+\;\Rightarrow\;
+\int_{r_i}^{r_o}\frac{\dd r}{r} = -\frac{2\pi k_wH}{\dot Q}\int_{T_{wi}}^{T_{wo}}\dd T
+\;\Rightarrow\;
+R_w = \frac{\ln(r_o/r_i)}{2\pi k_w H}.
+\]
+For a thin wall, $t_w = r_o - r_i \ll r_i$, $\ln(r_o/r_i)\approx t_w/r_i$ and $R_w \approx t_w/(k_wA)$.
+A label sleeve adds $R_c = R_c''/A$ in series.
+
+\sub{2.4 Add the series.} Writing each equality as a temperature drop and summing, the wall temperatures cancel:
+\[ T_d - T_b = \Qdb\,(R_i + R_c + R_w + R_o). \]
+
+\sub{2.5 Faces in parallel.} Side, base and (if submerged) top are parallel paths $j$:
+\[
+UA = \sum_{j}\left(\frac{1}{h_{i,j}A_{i,j}} + R_{c,j} + R_{w,j} + \frac{1}{h_{o,j}A_{o,j}}\right)^{-1},
+\qquad
+\frac{1}{U} = \frac{1}{h_i} + R_c'' + \frac{t_w}{k_w} + \frac{1}{h_o}\ \ (\text{thin wall, } A_i\approx A_o\approx A).
+\]
+
+\sub{2.6 What the wall probe measures.}
+\[ \frac{T_d - T_{wo}}{T_{wo}-T_b} = \frac{R_i+R_c+R_w}{R_o}. \]
+
+\textbf{Can versus bottle.} For aluminium $t_w/k_w \ll 1/h$, so $R_w$ drops out; PET keeps a finite $R_w$,
+which matters more once stirring shrinks $R_o$. Compare containers by $U$, not $\tau$.
+
+\begin{result}{Result 2 --- heat flow from drink to bath}
+\[ \Qdb = UA\,(T_d - T_b), \qquad \frac{1}{UA} = R_i + R_c + R_w + R_o \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 3 --- Biot number and when lumping is allowed}
+
+A still drink fails the lumping test, so A1 holds only because natural convection mixes the core:
+the model is a mixed core plus a thin boundary layer, not a conducting solid.
+
+\sub{3.1 The test.}
+\[
+\mathrm{Bi} = \frac{U_{\mathrm{ext}}L_c}{k_d}, \qquad
+\frac{1}{U_{\mathrm{ext}}} = R_c'' + \frac{t_w}{k_w} + \frac{1}{h_o}, \qquad
+L_c = \frac{V}{A}\ \text{or}\ r_i .
+\]
+Conduction-only lumping needs $\mathrm{Bi}<0.1$. The often-quoted tiny Biot number for an aluminium
+can uses $k_w$ and $t_w$: it is the \emph{wall's} Biot number.
+
+\sub{3.2 A conducting drink} in a long cylinder with a fixed-temperature wall decays with
+\[ \tau_{\mathrm{cond}} = \frac{r_i^2}{\alpha\, j_{0,1}^2}, \qquad j_{0,1} = \text{first zero of } J_0 . \]
+
+\sub{3.3 The rescue.} Buoyancy drives a boundary layer of thickness $\delta \sim H\,\mathrm{Ra}_H^{-1/4} \ll r_i$;
+its resistance is $R_i$, already in the circuit. Enhancement: $E = \tau_{\mathrm{cond}}/\tau_{\mathrm{measured}}$.
+
+\begin{result}{Result 3 --- lumping criterion}
+\[ \text{A1 holds if }\ \delta \sim H\,\mathrm{Ra}_H^{-1/4} \ll r_i\ \text{ and }\ |T_{\mathrm{top}} - T_{\mathrm{bottom}}| \ll T_d - T_b \quad(\text{not } \mathrm{Bi}<0.1) \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 4 --- Fixed-bath solution}
+
+Combine Results 1 and 2 with $T_b$ constant and $\theta = T_d - T_b$:
+\[
+\frac{\dd\theta}{\dd t} = -\frac{\theta}{\tau},\quad \tau \equiv \frac{C_d}{UA}
+\;\Rightarrow\;
+\int_{\theta_0}^{\theta}\frac{\dd\theta'}{\theta'} = -\int_0^t\frac{\dd t'}{\tau}
+\;\Rightarrow\;
+\ln\frac{\theta}{\theta_0} = -\frac{t}{\tau}.
+\]
+
+\sub{4.4 Derived quantities.}
+\[
+t_{T^*} = \tau\ln\frac{T_{d0}-T_b}{T^*-T_b}, \qquad
+\left.\frac{\dd T_d}{\dd t}\right|_0 = -\frac{T_{d0}-T_b}{\tau},
+\]
+\[
+\frac{t_{T^*}(T_{b1})}{t_{T^*}(T_{b2})} = \frac{\ln[(T_{d0}-T_{b1})/(T^*-T_{b1})]}{\ln[(T_{d0}-T_{b2})/(T^*-T_{b2})]},
+\qquad
+\frac{\dot T_d(0)|_{T_{b1}}}{\dot T_d(0)|_{T_{b2}}} = \frac{T_{d0}-T_{b1}}{T_{d0}-T_{b2}} .
+\]
+The two ratios differ: ``how much faster'' has two honest answers.
+
+\sub{4.5 Geometry inside $\tau$.} With $C_d \approx \rho_dc_dV$: $\ \tau = (\rho_dc_d/U)\,(V/A)$.
+
+\begin{result}{Result 4 --- fixed-bath cooling curve}
+\[ T_d(t) = T_b + (T_{d0}-T_b)\,e^{-t/\tau}, \qquad \tau = \frac{C_d}{UA} \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 5 --- Convection closures and the power-law cooling curve}
+
+\sub{5.1 Drink side, laminar natural convection} (length scale $H$, film drop $\Delta T_i = T_d - T_{wi}$):
+\[
+\mathrm{Ra}_H = \frac{g\beta\,\Delta T_i H^3}{\nu\alpha}, \qquad
+\mathrm{Nu}_H = \frac{h_iH}{k_d} = C_i\,\mathrm{Ra}_H^{1/4}
+\;\Rightarrow\;
+h_i = C_ik_d\left(\frac{g\beta}{\nu\alpha H}\right)^{1/4}\Delta T_i^{1/4} \equiv K_i\,\Delta T_i^{1/4}.
+\]
+
+\sub{5.2 Drink film dominant} ($R_i \gg R_c+R_w+R_o$, so $\Delta T_i\approx\theta$):
+$\ \Qdb = K_iA_i\,\theta^{5/4} \equiv a\,\theta^{5/4}$.
+
+\sub{5.3 Integrate with $T_b$ fixed.}
+\[
+\int_{\theta_0}^{\theta}\theta'^{-5/4}\dd\theta' = -\frac{a}{C_d}\int_0^t\dd t'
+\;\Rightarrow\;
+\theta^{-1/4} = \theta_0^{-1/4} + \frac{at}{4C_d}
+\;\Rightarrow\;
+\theta(t) = \theta_0\left(1+\frac{t}{t^*}\right)^{-4},
+\]
+\[
+t^* = \frac{4C_d}{a\,\theta_0^{1/4}} = 4\tau_0, \qquad \tau_0 = \frac{C_d}{h_i(\theta_0)A_i}.
+\]
+
+\sub{5.4 General exponent} ($\dot Q = a\theta^n$, $n\neq1$):
+\[
+\theta^{1-n} = \theta_0^{1-n} + (n-1)\frac{a}{C_d}t
+\;\Rightarrow\;
+\theta(t) = \theta_0\big[1+(n-1)t/\tau_0\big]^{-1/(n-1)}, \qquad \tau_0 = \frac{C_d}{a\theta_0^{\,n-1}} .
+\]
+$n\to1$ recovers Result 4.
+
+\sub{5.5 Exponent test.}
+\[ \ln\!\left(-\frac{\dd T_d}{\dd t}\right) = \ln\frac{a}{C_d} + n\ln(T_d - T_b). \]
+
+\sub{5.6 Mixed resistances} (implicit in $\Qdb$):
+\[ \Qdb = K_iA_i\big[\theta - \Qdb\,(R_c+R_w+R_o)\big]^{5/4}, \qquad 1 \le n_{\mathrm{eff}} \le \tfrac54 . \]
+
+\sub{5.7 Bath side.}
+\[
+\text{unstirred: } \mathrm{Nu}_o = C_o\left(\frac{g\,\Delta\rho\,H^3}{\rho_b\nu_b\alpha_b}\right)^{1/4},
+\qquad
+\text{stirred: } \mathrm{Nu}_o = \frac{h_oD}{k_b} = C\,\mathrm{Re}^m\mathrm{Pr}^{1/3},\ \ \mathrm{Re} = \frac{u_\infty D}{\nu_b}.
+\]
+
+\sub{5.8 Caveat --- $\beta(T)$.} Near the density maximum use the density difference directly:
+\[ \mathrm{Ra}_H = \frac{g\,[\rho_d(T_{wi})-\rho_d(T_d)]\,H^3}{\rho_d\,\nu\,\alpha}. \]
+Fit $n$ only over the early stretch of a run.
+
+\begin{result}{Result 5 --- convection closure and fixed-bath power law}
+\[ h_i = K_i(T_d - T_{wi})^{1/4}, \qquad \Qdb = a\theta^n,\ 1\le n\le\tfrac54, \qquad \theta(t) = \theta_0\left(1+\frac{t}{t^*}\right)^{-4}\ (n=\tfrac54) \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 6 --- Phase equilibrium of the bath}
+
+\sub{6.1 Equilibrium condition.}
+\[
+\mu_{\mathrm{ice}}(\Tabs) = \mu_w^*(\Tabs) + R\Tabs\ln a_w
+\;\Rightarrow\;
+R\Tabs\ln a_w = -\Delta g_{\mathrm{fus}}(\Tabs).
+\]
+
+\sub{6.2 Gibbs--Helmholtz} with $\Delta g_{\mathrm{fus}}(\Tabs_0)=0$, $\Delta h_{\mathrm{fus}}$ constant:
+\[
+\frac{\Delta g_{\mathrm{fus}}}{\Tabs} = \Delta h_{\mathrm{fus}}\left(\frac{1}{\Tabs}-\frac{1}{\Tabs_0}\right)
+\;\Rightarrow\;
+\ln a_w = -\frac{\Delta h_{\mathrm{fus}}}{R}\left(\frac{1}{\Tabs}-\frac{1}{\Tabs_0}\right).
+\]
+
+\sub{6.3 Dilute, ideal limit $\to$ Blagden.} $\ln a_w \approx -\nu_i b M_{\mathrm{H_2O}}$, $\Tabs\Tabs_0\approx\Tabs_0^2$:
+\[
+\Delta T_f = \underbrace{\frac{R\Tabs_0^2M_{\mathrm{H_2O}}}{\Delta h_{\mathrm{fus}}}}_{K_f}\nu_i b,
+\qquad b = \frac{w/M_{\mathrm{NaCl}}}{1-w};
+\qquad
+\frac{1}{\Tabs_{\mathrm{liq}}} = \frac{1}{\Tabs_0} + \frac{R}{\Delta h_{\mathrm{fus}}}\varphi(w)\,\nu_i\,b(w)\,M_{\mathrm{H_2O}}\ \ (\text{real brine}).
+\]
+
+\sub{6.4 Empirical liquidus (Bodnar 1993).} With $\vartheta = -\Tliq$ ($^\circ$C), $W=100w$:
+\[
+W = b_1\vartheta + b_2\vartheta^2 + b_3\vartheta^3,
+\qquad
+\frac{\dd\Tliq}{\dd w} = -\frac{100}{b_1 + 2b_2\vartheta + 3b_3\vartheta^2} < 0 .
+\]
+
+\sub{6.5 Gibbs phase rule} at fixed pressure, $C=2$: $F = 3 - P$.
+
+{\small
+\begin{tabularx}{\linewidth}{X c c X}
+\toprule
+Phases present & $P$ & $F$ & What is fixed \\
+\midrule
+brine & 1 & 2 & nothing \\
+ice + brine & 2 & 1 & $T = \Tliq(w)$ \\
+brine + solid salt & 2 & 1 & $w = \wsat(T)$ \\
+ice + brine + solid salt & 3 & 0 & $T=T_E$, $w=w_E$ \\
+ice + solid salt & 2 & 1 & $T$ free, below $T_E$ \\
+\bottomrule
+\end{tabularx}}
+
+\sub{6.6 Eutectic and solubility.}
+\[
+\Tliq(w_E) = T_E,\qquad \wsat(T_E) = w_E,\qquad
+\wsat(T) \approx w_E + (w_p - w_E)\frac{T - T_E}{T_p - T_E}.
+\]
+
+\begin{result}{Result 6 --- phase constraints}
+\[ \text{ice + brine: } T_b = \Tliq(w);\qquad \text{brine + salt: } w = \wsat(T_b);\qquad \text{all three: } T_b = T_E,\ w = w_E \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 7 --- Bath mass balances}
+
+\[
+m_W = m_i + (1-w)m_l, \qquad m_S = w\,m_l + m_h, \qquad m_W + m_S = m_i + m_l + m_h .
+\]
+With no solid salt ($m_h=0$):
+\[
+m_l = m_W + m_S - m_i, \qquad w = \frac{m_S}{m_W+m_S-m_i};
+\qquad
+\frac{\dd m_l}{\dd m_m} = 1,\qquad \frac{\dd w}{\dd m_m} = -\frac{m_S}{m_l^2} = -\frac{w}{m_l}\quad(\dd m_m = -\dd m_i).
+\]
+Whether $\bar w = m_S/(m_W+m_S)$ lies below or above $w_E$ decides which phase runs out first on the plateau.
+
+\begin{result}{Result 7 --- mass constraints}
+\[ m_W = m_i + (1-w)m_l,\quad m_S = w\,m_l + m_h,\quad 0\le m_i\le m_W,\quad 0\le m_h\le m_S \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 8 --- Bath enthalpy and the bath energy equation}
+
+\sub{8.1 Specific enthalpies} (reference: liquid water and solid NaCl at $0\,^\circ$C; dilution enthalpy neglected):
+\[
+h_{\mathrm{ice}} = c_iT - L_f,\qquad h_{\mathrm{salt}} = c_hT,\qquad h_{\mathrm{brine}} = c_bT + w\,\Delta h_s .
+\]
+
+\sub{8.2 Total enthalpy.}
+\[ \Hb = m_i(c_iT_b - L_f) + m_l(c_bT_b + w\Delta h_s) + m_h c_hT_b\ \ [+\,C_tT_b \text{ if the tank is included}]. \]
+
+\sub{8.3--8.4 First law and box leak.}
+\[ \frac{\dd\Hb}{\dd t} = \Qdb + \dot Q_{\mathrm{leak}} + \Pst, \qquad \dot Q_{\mathrm{leak}} = \UAbox(\Tenv - T_b). \]
+
+\sub{8.5 Energy check.} Adding Result 1, $\Qdb$ cancels: with the box sealed and no stirrer, $C_dT_d + \Hb$ is constant.
+
+\begin{result}{Result 8 --- bath energy equation}
+\[ \frac{\dd\Hb}{\dd t} = UA(T_d - T_b) + \UAbox(\Tenv - T_b) + \Pst \]
+\[ \Hb = m_i(c_iT_b - L_f) + m_l(c_bT_b + w\Delta h_s) + m_hc_hT_b \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 9 --- Inverting $\Hb$: the regime map}
+
+Given $\Hb$, $m_W$, $m_S$, the bath state is unique: five unknowns, two mass balances, one enthalpy,
+and two constraints from whichever phases are present.
+\[ (T_b,\,m_i,\,m_l,\,m_h,\,w) = \mathcal S(\Hb;\,m_W,\,m_S) \]
+
+\sub{R-I --- liquid only} ($m_i=m_h=0$, $m_l = m_W+m_S$, $w=\bar w$):
+\[ T_b = \frac{\Hb - m_S\Delta h_s}{(m_W+m_S)c_b}. \]
+
+\sub{R-II --- ice + brine on the liquidus} ($m_h=0$; exists only if $\bar w<w_E$):
+\[
+\Hb = \Big(m_W+m_S-\frac{m_S}{w}\Big)\big(c_i\Tliq(w) - L_f\big) + \frac{m_S}{w}c_b\Tliq(w) + m_S\Delta h_s \equiv \Hb_{\mathrm{II}}(w),
+\]
+solved for $w\in[\bar w, w_E]$; the root is unique since $\dd\Hb/\dd m_m = \Leff>0$ while $\dd w/\dd m_m<0$. Then $T_b=\Tliq(w)$.
+
+\sub{R-III --- eutectic plateau} ($T_b = T_E$, $w = w_E$):
+\[
+\Hb = \Hb_{E0} + \Lambda_E m_l,\qquad \Hb_{E0} = m_W(c_iT_E - L_f) + m_Sc_hT_E,
+\]
+\[
+\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b - (1-w_E)c_i - w_Ec_h\big],
+\]
+\[
+m_l = \frac{\Hb - \Hb_{E0}}{\Lambda_E},\qquad m_i = m_W - (1-w_E)m_l,\qquad m_h = m_S - w_Em_l .
+\]
+Salt runs out first (into R-II) if $\bar w<w_E$; ice runs out first (into R-IV) if $\bar w>w_E$.
+
+\sub{R-IV --- saturated brine + solid salt, no ice} (only if $\bar w>w_E$):
+\[
+\Hb = \frac{m_W}{1-\wsat}\big(c_bT_b + \wsat\Delta h_s\big) + \Big(m_S - \frac{\wsat m_W}{1-\wsat}\Big)c_hT_b \equiv \Hb_{\mathrm{IV}}(T_b),
+\]
+solved for $T_b\in[T_E, T_\star]$, where $\wsat(T_\star)=\bar w$.
+
+\sub{R-V --- fully solid} ($m_l=0$):
+\[ T_b = \frac{\Hb + m_WL_f}{m_Wc_i + m_Sc_h}. \]
+
+\textbf{Regime boundaries.} The state is continuous across every boundary.
+
+{\small
+\begin{tabularx}{\linewidth}{l l l X}
+\toprule
+Bath type & Regime & Range & Threshold \\
+\midrule
+$\bar w<w_E$ & R-I & $\Hb\ge\Hb_A$ & $\Hb_A = (m_W+m_S)c_b\Tliq(\bar w) + m_S\Delta h_s$ \\
+ & R-II & $\Hb_B\le\Hb<\Hb_A$ & $\Hb_B = \Hb_{E0} + \Lambda_E m_S/w_E$ \\
+ & R-III & $\Hb_{E0}\le\Hb<\Hb_B$ & \\
+ & R-V & $\Hb<\Hb_{E0}$ & \\
+\midrule
+$\bar w>w_E$ & R-I & $\Hb\ge\Hb_C$ & $\Hb_C = (m_W+m_S)c_bT_\star + m_S\Delta h_s$ \\
+ & R-IV & $\Hb_D\le\Hb<\Hb_C$ & $\Hb_D = \Hb_{E0} + \Lambda_E m_W/(1-w_E)$ \\
+ & R-III & $\Hb_{E0}\le\Hb<\Hb_D$ & \\
+ & R-V & $\Hb<\Hb_{E0}$ & \\
+\bottomrule
+\end{tabularx}}
+
+\begin{result}{Result 9 --- bath closure}
+\[ T_b = T_b(\Hb),\quad m_i = m_i(\Hb),\quad m_h = m_h(\Hb),\quad w = w(\Hb) \quad\text{via R-I to R-V} \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 10 --- Effective latent heat, bath drift and the blank run}
+
+\sub{10.1 Differentiate along the liquidus} (R-II, $m_l = m_W+m_S-m_i$):
+\[ \dd\Hb = \big[h_{\mathrm{ice}}(T_b) - c_bT_b\big]\dd m_i + \underbrace{(m_ic_i + m_lc_b)}_{C_B}\dd T_b . \]
+
+\sub{10.2 Per kilogram melted.}
+\[ \Leff \equiv \frac{\dd\Hb}{\dd m_m} = L_f + (c_b - c_i)T_b + C_B\frac{\dd T_b}{\dd m_m}. \]
+
+\sub{10.3 Drift per kilogram melted.}
+\[
+\frac{\dd T_b}{\dd m_m} = -\frac{w}{m_l}\frac{\dd\Tliq}{\dd w} = \frac{100\,w}{m_l\,(b_1 + 2b_2\vartheta + 3b_3\vartheta^2)} > 0 .
+\]
+
+\sub{10.4--10.5 Effective heat capacity, every regime.}
+\[
+\Ceff \equiv \frac{\dd\Hb}{\dd T_b} =
+\begin{cases}
+(m_W+m_S)c_b & \text{R-I}\\[4pt]
+C_B + \dfrac{L_f + (c_b-c_i)T_b}{\dd T_b/\dd m_m} & \text{R-II}\\[10pt]
+\infty & \text{R-III}\\[4pt]
+m_lc_b + m_hc_h + \dfrac{m_W\,\wsat'(T_b)}{(1-\wsat)^2}\big[(c_b-c_h)T_b + \Delta h_s\big] & \text{R-IV}\\[10pt]
+m_Wc_i + m_Sc_h & \text{R-V}
+\end{cases}
+\]
+
+\sub{10.6 The plateau as a thermostat} ($\dot Q_{\mathrm{in}} = \Qdb + \dot Q_{\mathrm{leak}} + \Pst$):
+\[
+\frac{\dd m_l}{\dd t} = \frac{\dot Q_{\mathrm{in}}}{\Lambda_E},\quad
+\frac{\dd m_i}{\dd t} = -(1-w_E)\frac{\dot Q_{\mathrm{in}}}{\Lambda_E},\quad
+\frac{\dd m_h}{\dd t} = -w_E\frac{\dot Q_{\mathrm{in}}}{\Lambda_E},\quad
+t_{\mathrm{buffer}} = \frac{m_h(0)\Lambda_E}{w_E\overline{\dot Q}_{\mathrm{in}}}.
+\]
+
+\sub{10.7 Blank-run inversion} (no drink, R-II):
+\[
+\dot Q_{\mathrm{leak}} + \Pst = \Leff\frac{\dd T_b/\dd t}{\dd T_b/\dd m_m} = \Ceff\frac{\dd T_b}{\dd t}
+\;\Rightarrow\;
+\UAbox = \frac{\Ceff\dot T_b - \Pst}{\Tenv - T_b}.
+\]
+Using $L_f$ in place of $\Leff$ underestimates the leak.
+
+\begin{result}{Result 10 --- explicit bath temperature equation}
+\[ \Ceff(T_b)\frac{\dd T_b}{\dd t} = UA(T_d - T_b) + \UAbox(\Tenv - T_b) + \Pst \qquad(\dot T_b = 0 \text{ in R-III}) \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 11 --- Initial state from premixing}
+
+\sub{11.1 Enthalpy of the ingredients.}
+\[ \Hb_0 = m_{i0}(c_iT_{i0} - L_f) + m_{w0}c_wT_{w0} + m_Sc_hT_{s0}, \qquad m_W = m_{i0}+m_{w0}. \]
+
+\sub{11.2 Adiabatic mixing.} $(T_{b0}, m_i, m_l, m_h, w)(0) = \mathcal S(\Hb_0; m_W, m_S)$. $\Hb_0$ is path-independent:
+one-shot, staged and pre-dissolved addition reach the same equilibrium, only at different rates.
+
+\sub{11.3 Start on the eutectic} iff
+$\ \Hb_{E0}\le\Hb_0<\Hb_B\ (\bar w<w_E)\ $ or $\ \Hb_{E0}\le\Hb_0<\Hb_D\ (\bar w>w_E)$.
+
+\sub{11.4 Keep a salt buffer} $m_h(0)\ge m_{\mathrm{buf}}$:
+\[ \Hb_0 \le \Hb_{E0} + \frac{\Lambda_E(m_S - m_{\mathrm{buf}})}{w_E}. \]
+
+\sub{11.5 Minimum ice fraction} $f = m_{i0}/m_W$, for any upper bound $\Hb_{\max}$:
+\[ f \ge f_{\mathrm{crit}} = \frac{m_Wc_wT_{w0} + m_Sc_hT_{s0} - \Hb_{\max}}{m_W\,(c_wT_{w0} - c_iT_{i0} + L_f)}. \]
+
+\sub{11.6 Latent share of the initial cooling.}
+\[ \chi_{\mathrm{lat}} = \frac{\Delta m\,L_f}{\Delta m\,L_f + m_{S,\mathrm{dis}}\Delta h_s}. \]
+
+\begin{result}{Result 11 --- initial conditions}
+\[ T_d(0) = T_{d0}, \qquad \Hb(0) = \Hb_0 = m_{i0}(c_iT_{i0} - L_f) + m_{w0}c_wT_{w0} + m_Sc_hT_{s0} \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 12 --- Parasitic terms: box leak and stirrer}
+
+\[
+\frac{1}{\UAbox} = \frac{1}{h_{\mathrm{air}}A_{\mathrm{out}}} + \frac{\delta_{\mathrm{box}}}{k_{\mathrm{box}}A_{\mathrm{box}}} + \frac{1}{h_{\mathrm{in}}A_{\mathrm{in}}}
+\approx \frac{\delta_{\mathrm{box}}}{k_{\mathrm{box}}A_{\mathrm{box}}},
+\qquad \Pst = \Gamma\omega .
+\]
+If the lid is off (violates A5): $\dot Q_{\mathrm{surf}} = h_sA_s(T_{\mathrm{air}} - T_b) + \dot m_v h_{sg}$.
+If the drink is not fully immersed (violates A8):
+$\ C_d\dot T_d = -UA(T_d - T_b) + UA_{da}(T_{\mathrm{air}} - T_d)$.
+
+\begin{result}{Result 12 --- parasitic inputs}
+\[ \dot Q_{\mathrm{leak}} = \UAbox(\Tenv - T_b),\qquad \UAbox\approx\frac{k_{\mathrm{box}}A_{\mathrm{box}}}{\delta_{\mathrm{box}}},\qquad \Pst = \Gamma\omega \]
+\end{result}
+
+% ---------------------------------------------------------------
+\step{Step 13 --- The closed model}
+
+Two first-order ODEs in the state $(T_d, \Hb)$, closed by one heat-flow law and one algebraic map
+from $\Hb$ to the bath state.
+
+\sub{13.1 Governing equations.}
+\[
+C_d\frac{\dd T_d}{\dd t} = -\Qdb, \qquad
+\frac{\dd\Hb}{\dd t} = \Qdb + \UAbox(\Tenv - T_b) + \Pst .
+\]
+
+\sub{13.2 Heat-flow closure --- choose one.}
+\[
+\begin{aligned}
+&\text{A (constant conductance):} && \Qdb = UA(T_d - T_b), \quad \tfrac{1}{UA} = R_i+R_c+R_w+R_o\\
+&\text{B (drink-film convection):} && \Qdb = K_iA_i\big[(T_d - T_b) - \Qdb(R_c+R_w+R_o)\big]^{5/4},\quad K_i = C_ik_d\Big(\tfrac{g\beta}{\nu\alpha H}\Big)^{1/4}
+\end{aligned}
+\]
+
+\sub{13.3 Bath closure.} $(T_b, m_i, m_l, m_h, w) = \mathcal S(\Hb; m_W, m_S)$:
+{\small
+\[
+\mathcal S:\
+\begin{cases}
+\text{R-I:} & m_i=m_h=0,\ w=\bar w,\ T_b = \dfrac{\Hb - m_S\Delta h_s}{(m_W+m_S)c_b}\\[10pt]
+\text{R-II:} & m_h=0,\ \Hb = \Big(m_W+m_S-\dfrac{m_S}{w}\Big)\big(c_i\Tliq(w)-L_f\big) + \dfrac{m_S}{w}c_b\Tliq(w) + m_S\Delta h_s,\ T_b=\Tliq(w)\\[10pt]
+\text{R-III:} & T_b=T_E,\ w=w_E,\ m_l = \dfrac{\Hb-\Hb_{E0}}{\Lambda_E},\ m_i = m_W-(1-w_E)m_l,\ m_h = m_S - w_Em_l\\[10pt]
+\text{R-IV:} & m_i = 0,\ w=\wsat(T_b),\ \Hb = \dfrac{m_W(c_bT_b + w\Delta h_s)}{1-w} + \Big(m_S - \dfrac{wm_W}{1-w}\Big)c_hT_b\\[10pt]
+\text{R-V:} & m_l=0,\ T_b = \dfrac{\Hb + m_WL_f}{m_Wc_i + m_Sc_h}
+\end{cases}
+\]}
+with the regime chosen by the Step 9 threshold table, $W = b_1\vartheta+b_2\vartheta^2+b_3\vartheta^3$
+($W=100w$, $\vartheta=-\Tliq$), and
+\[
+\Hb_{E0} = m_W(c_iT_E - L_f) + m_Sc_hT_E,\quad
+\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b-(1-w_E)c_i-w_Ec_h\big],\quad
+\bar w = \frac{m_S}{m_W+m_S}.
+\]
+
+\sub{13.4 Equivalent explicit form} (for Desmos / Mathematica; integrate the $\Hb$ form, which carries the plateau without dividing by $\Ceff=\infty$):
+\[
+C_d\dot T_d = -\Qdb, \qquad \Ceff(T_b)\,\dot T_b = \Qdb + \UAbox(\Tenv - T_b) + \Pst\quad(\dot T_b = 0 \text{ in R-III}).
+\]
+
+\sub{13.5 Initial conditions.}
+\[ T_d(0) = T_{d0},\qquad \Hb(0) = m_{i0}(c_iT_{i0}-L_f) + m_{w0}c_wT_{w0} + m_Sc_hT_{s0},\qquad m_W = m_{i0}+m_{w0}. \]
+
+\sub{13.6 Stop and validity conditions.}
+\begin{itemize}
+  \item $T_d$ reaches the target $T^*$ --- the measured output.
+  \item $T_d$ reaches the drink's freezing point $T_{fd}$ --- beyond this the drink needs its own enthalpy model.
+  \item In a buffered run, $m_h\to0$ --- the thermostat is gone and the bath leaves R-III.
+  \item $T_d$ approaches the density maximum --- closure B and A1 weaken.
+\end{itemize}
+
+\sub{13.7 Parameters and where each comes from.}
+
+{\small
+\begin{tabularx}{\linewidth}{l X X}
+\toprule
+Group & Parameters & How fixed \\
+\midrule
+Drink & $C_d = m_dc_d + m_cc_c$ & weighing + tables \\
+Heat path & $UA$ (A) or $K_iA_i, R_c, R_w, R_o$ (B) & fitted on a buffered run, where $T_b=T_E$ is known \\
+Bath composition & $m_W, m_S, m_{i0}, m_{w0}$ & weighing \\
+Bath properties & $c_i, c_b, c_h, c_w, L_f, \Delta h_s$ & tables \\
+Phase diagram & $b_1,b_2,b_3, T_E, w_E, \wsat(T)$ & Bodnar, literature, own coexistence curve \\
+Environment & $\UAbox, \Pst, \Tenv(t)$ & blank runs, logged channel 4 \\
+Start & $T_{d0}, T_{i0}, T_{w0}, T_{s0}$ & logged \\
+\bottomrule
+\end{tabularx}}
+
+Once $UA$ is fixed on a buffered run, an unbuffered run has no free parameter left; it is a prediction.
+
+\begin{tcolorbox}[enhanced,colback=accentB!6,colframe=accentB!80,boxrule=1pt,arc=2pt,
+  fonttitle=\bfseries,coltitle=white,title={Result 13 --- the current model, in one block}]
+\[
+\begin{aligned}
+C_d\,\dot T_d &= -\,UA\,(T_d - T_b)\\
+\dot{\Hb} &= UA\,(T_d - T_b) + \UAbox(\Tenv - T_b) + \Pst\\
+T_b &= T_b(\Hb;\,m_W,\,m_S)\ \text{ via } \mathcal S\\
+T_d(0) &= T_{d0},\qquad \Hb(0) = \Hb_0
+\end{aligned}
+\]
+\end{tcolorbox}
+
+% ---------------------------------------------------------------
+\step{Step 14 --- Closed-form special cases}
+
+\sub{14.1 Buffered bath} (R-III throughout, $T_b = T_E$): Result 4 with $T_b = T_E$,
+valid while $t < t_{\mathrm{buffer}}$ (10.6):
+\[ T_d(t) = T_E + (T_{d0} - T_E)\,e^{-t/\tau}. \]
+
+\sub{14.2 Linearised liquidus bath} (R-II, $\Ceff$ constant, $\UAbox = \Pst = 0$): a two-capacitor problem.
+Subtracting the two equations of 13.4,
+\[
+\frac{\dd\theta}{\dd t} = -UA\Big(\frac{1}{C_d}+\frac{1}{\Ceff}\Big)\theta
+\;\Rightarrow\;
+\theta = \theta_0 e^{-t/\tau_c},\qquad \tau_c = \frac{C_d\Ceff}{UA\,(C_d+\Ceff)} = \frac{\tau}{1+\Gamma},\quad \Gamma = \frac{C_d}{\Ceff}.
+\]
+Energy conservation, $C_dT_d + \Ceff T_b = \text{const}$, fixes the shared final temperature:
+\[
+T_\infty = \frac{C_dT_{d0} + \Ceff T_{b0}}{C_d+\Ceff},\qquad
+T_d(t) = T_\infty + (T_{d0}-T_\infty)e^{-t/\tau_c},\qquad
+T_b(t) = T_\infty - (T_\infty - T_{b0})e^{-t/\tau_c}.
+\]
+The drink reaches $T^*$ only if $T_\infty < T^*$, after $t_{T^*} = \tau_c\ln\big[(T_{d0}-T_\infty)/(T^*-T_\infty)\big]$.
+
+\sub{14.3 With the box leak} ($\Tenv$ constant): a linear system $\dot{\mathbf x} = \mathsf A\mathbf x + \mathbf f$, $\mathbf x = (T_d, T_b)^{\mathsf T}$,
+\[
+\mathsf A = \begin{pmatrix} -\dfrac{UA}{C_d} & \dfrac{UA}{C_d}\\[8pt] \dfrac{UA}{\Ceff} & -\dfrac{UA+\UAbox}{\Ceff}\end{pmatrix},
+\qquad
+\lambda_\pm = \tfrac12\Big[\operatorname{tr}\mathsf A \pm \sqrt{(\operatorname{tr}\mathsf A)^2 - 4\det\mathsf A}\Big],
+\]
+\[
+\operatorname{tr}\mathsf A = -\Big(\frac{UA}{C_d} + \frac{UA+\UAbox}{\Ceff}\Big),\qquad
+\det\mathsf A = \frac{UA\cdot\UAbox}{C_d\,\Ceff}.
+\]
+Both eigenvalues are negative; the slow one is set by the leak, the fast one by $UA$.
+
+\sub{14.4 Fixed bath, convection-limited drink:} Result 5, $\theta = \theta_0(1+t/t^*)^{-4}$, $t^* = 4\tau_0$.
+
+\end{document}

@@ -21,6 +21,7 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 | `test_b8.py` | Checks on the model. Run it after changing `b8_model.py`. |
 | `b8_sim.py` | The older one-lump equilibrium model behind the report (unchanged). |
 | `B8-salted-ice-bath.tex` / `.pdf` | The report: the physics derived from first principles, then what both models say. |
+| `B8-model-derivation.tex` / `.pdf` | The lumped drink-and-bath model derived step by step, in symbols only, ending in its closed equation set and closed-form special cases. |
 | `figs/`, `fonts/` | Figures and fonts for the report. |
 
 Keep everything in this one folder. The programs and the `.tex` find the other
@@ -436,6 +437,17 @@ conservation of energy and mass, the thermodynamics of salt water and the laws o
 mass transfer, explaining every equation; Part II gives what each model says; Part III the
 experiments. Its figure `figs/f9_spreading.pdf` is redrawn by
 `python3 b8_simple.py --report-figure`.
+
+The same workflow builds the second document, `B8-model-derivation.pdf`, and commits it
+alongside. That one uses only standard packages and pdfLaTeX:
+
+```
+pdflatex B8-model-derivation.tex
+pdflatex B8-model-derivation.tex
+```
+
+On Overleaf it compiles with the default compiler. Both PDFs are linked from the top of
+the web simulator.
 
 ## Fonts
 

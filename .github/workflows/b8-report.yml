@@ -1,15 +1,17 @@
 name: B8 report
 
-# Builds b8-cold-drink/B8-salted-ice-bath.pdf from its .tex with XeLaTeX on
-# GitHub's runner and commits the PDF back to the branch, so nobody needs TeX
-# installed.  It runs by itself when a push to main changes the report's
-# sources; for another branch, or to rebuild by hand: Actions -> B8 report ->
-# Run workflow.  The check workflow (b8-check.yml) stays free of LaTeX.
+# Builds the two B8 documents on GitHub's runner and commits the PDFs back to
+# the branch, so nobody needs TeX installed:
+#   b8-cold-drink/B8-salted-ice-bath.pdf   the report (XeLaTeX)
+#   b8-cold-drink/B8-model-derivation.pdf  the model derivation (pdfLaTeX)
+# It runs by itself when a push to main changes their sources; for another
+# branch, or to rebuild by hand: Actions -> B8 report -> Run workflow.  The
+# check workflow (b8-check.yml) stays free of LaTeX.
 
 on:
   push:
     branches: [main]
-    paths: ['b8-cold-drink/B8-salted-ice-bath.tex', 'b8-cold-drink/figs/**', '.github/workflows/b8-report.yml']
+    paths: ['b8-cold-drink/B8-salted-ice-bath.tex', 'b8-cold-drink/B8-model-derivation.tex', 'b8-cold-drink/figs/**', '.github/workflows/b8-report.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,20 +31,23 @@ jobs:
         working-directory: b8-cold-drink
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # the whole history, to date each PDF by its sources
 
-      - name: Install XeLaTeX
+      - name: Install TeX
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends \
-            texlive-xetex texlive-latex-recommended texlive-latex-extra \
-            texlive-fonts-recommended fonts-lmodern
-          # the maths font is the only one not in fonts/
+            texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-pictures \
+            texlive-fonts-recommended fonts-lmodern lmodern
+          # the report's maths font is the only one not in fonts/
           kpsewhich latinmodern-math.otf || fc-list | grep -i 'latin modern math'
 
-      - name: Build the PDF (until the cross-references and contents settle)
+      # Each PDF is dated by the last commit that changed its sources, so the
+      # same sources give the same file and the rebuild on main changes nothing.
+      - name: Build the report (until the cross-references and contents settle)
         run: |
-          # date the PDF by the last commit, so the same sources give the same file
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" FORCE_SOURCE_DATE=1
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct -- B8-salted-ice-bath.tex figs fonts)" FORCE_SOURCE_DATE=1
           xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex > /dev/null
           xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex > /dev/null
           xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex
@@ -51,7 +56,15 @@ jobs:
             echo "::error::the report has undefined references"; exit 1
           fi
 
-      - name: Keep the PDF and the log with the run
+      - name: Build the model derivation (until the contents settle)
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct -- B8-model-derivation.tex)" FORCE_SOURCE_DATE=1
+          pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex > /dev/null
+          pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex > /dev/null
+          pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex
+          grep -E "Overfull|Rerun" B8-model-derivation.log || echo "no overfull lines, nothing to rerun"
+
+      - name: Keep the PDFs and the logs with the run
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -59,18 +72,20 @@ jobs:
           path: |
             b8-cold-drink/B8-salted-ice-bath.pdf
             b8-cold-drink/B8-salted-ice-bath.log
+            b8-cold-drink/B8-model-derivation.pdf
+            b8-cold-drink/B8-model-derivation.log
 
-      - name: Commit the PDF if it changed
+      - name: Commit the PDFs if they changed
         id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add B8-salted-ice-bath.pdf
+          git add B8-salted-ice-bath.pdf B8-model-derivation.pdf
           if git diff --cached --quiet; then
-            echo "The PDF is unchanged."
+            echo "The PDFs are unchanged."
             exit 0
           fi
-          git commit -q -m "Rebuild the B8 report PDF from ${GITHUB_SHA::7}"
+          git commit -q -m "Rebuild the B8 PDFs from ${GITHUB_SHA::7}"
           git pull -q --rebase origin "$GITHUB_REF_NAME"
           git push -q origin "HEAD:$GITHUB_REF_NAME"
           echo "pushed=true" >> "$GITHUB_OUTPUT"
