@@ -20,7 +20,7 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 | `web/` | The web simulator: the same model, run in a browser. |
 | `test_b8.py` | Checks on the model. Run it after changing `b8_model.py`. |
 | `b8_sim.py` | The older one-lump equilibrium model behind the report (unchanged). |
-| `B8-salted-ice-bath.tex` / `.pdf` | Write-up of the `b8_sim.py` model, and (section 12) of the simulator and the heat spreading. |
+| `B8-salted-ice-bath.tex` / `.pdf` | The report: the physics derived from first principles, then what both models say. |
 | `figs/`, `fonts/` | Figures and fonts for the report. |
 
 Keep everything in this one folder. The programs and the `.tex` find the other
@@ -328,7 +328,7 @@ Each change was switched on alone, on top of the first version's physics:
 |---|---|---|---|
 | First version | | 178 s | −20.11 °C |
 | Air films on the box: room air, the foam–glass gap and the air under the lid | They are about a quarter of the insulation's resistance. Leak 0.43 → 0.32 W/K | 177 s | −20.19 °C |
-| Salt grains dissolve towards halite saturation, and stop at the eutectic composition while there is ice | The grains are halite (rock salt). Hydrohalite forms reluctantly (the report's own argument, §11.3) | 174 s | −20.72 °C |
+| Salt grains dissolve towards halite saturation, and stop at the eutectic composition while there is ice | The grains are halite (rock salt). Hydrohalite forms reluctantly (the report's own argument, §16.3) | 174 s | −20.72 °C |
 | The drink can freeze | It freezes near −0.9 °C, not −20 °C. Ice forms gradually as the sugar concentrates. Optional supercooling | 178 s; the drink ends 95 % frozen | −20.11 °C |
 | Drink-side h ∝ ΔT^¼ | Free convection inside the can | 172 s | −20.11 °C |
 | Ice heat capacity falls with temperature | IAPWS R10-06: 2097 J/(kg K) at 0 °C, 1950 at −20 °C | 178 s | −20.10 °C |
@@ -394,7 +394,7 @@ coefficients and the solubility line.
 
 - **No layers from top to bottom.** The bath is split into rings around the can, but
   each ring has one temperature from the floor to the surface. In an unstirred bath,
-  cold dense brine sits on the floor and fresh meltwater sits at the top (report §9).
+  cold dense brine sits on the floor and fresh meltwater sits at the top (report §14).
 - **Convection as a conductivity.** The brine's movement through the ice is taken as a
   fixed multiple of still brine's conductivity. Real convection depends on the
   temperature differences that drive it, and differs above and below the can.
@@ -431,8 +431,10 @@ Run it twice so that the cross-references resolve. The report needs XeLaTeX beca
 loads its fonts with `fontspec`. The maths font, Latin Modern Math, is not in `fonts/`.
 It comes with TeX Live and MiKTeX. On Overleaf, upload the whole folder and set the
 compiler to XeLaTeX. The report describes `b8_sim.py` and quotes its lines 111–189,
-so that file is left exactly as it was. Its section 12 describes the simulator
-(`b8_model.py`) and the heat spreading; its figure `figs/f9_spreading.pdf` is redrawn by
+so that file is left exactly as it was. Part I derives the physics of both models from
+conservation of energy and mass, the thermodynamics of salt water and the laws of heat and
+mass transfer, explaining every equation; Part II gives what each model says; Part III the
+experiments. Its figure `figs/f9_spreading.pdf` is redrawn by
 `python3 b8_simple.py --report-figure`.
 
 ## Fonts
