@@ -92,7 +92,7 @@ Source column: \textbf{M} measured on this rig, \textbf{T} tabulated / literatur
 \textbf{D} derived here, \textbf{S} state variable.
 
 {\small
-\begin{longtable}{>{$}l<{$} p{8.2cm} l l}
+\begin{longtable}{>{$}l<{$} p{7.1cm} l l}
 \toprule
 \text{Symbol} & Meaning & Unit & Src \\
 \midrule
@@ -224,11 +224,11 @@ A label sleeve adds $R_c = R_c''/A$ in series.
 \[ T_d - T_b = \Qdb\,(R_i + R_c + R_w + R_o). \]
 
 \sub{2.5 Faces in parallel.} Side, base and (if submerged) top are parallel paths $j$:
-\[
+\begin{gather*}
 UA = \sum_{j}\left(\frac{1}{h_{i,j}A_{i,j}} + R_{c,j} + R_{w,j} + \frac{1}{h_{o,j}A_{o,j}}\right)^{-1},
-\qquad
+\\
 \frac{1}{U} = \frac{1}{h_i} + R_c'' + \frac{t_w}{k_w} + \frac{1}{h_o}\ \ (\text{thin wall, } A_i\approx A_o\approx A).
-\]
+\end{gather*}
 
 \sub{2.6 What the wall probe measures.}
 \[ \frac{T_d - T_{wo}}{T_{wo}-T_b} = \frac{R_i+R_c+R_w}{R_o}. \]
@@ -414,11 +414,11 @@ ice + solid salt & 2 & 1 & $T$ free, below $T_E$ \\
 m_W = m_i + (1-w)m_l, \qquad m_S = w\,m_l + m_h, \qquad m_W + m_S = m_i + m_l + m_h .
 \]
 With no solid salt ($m_h=0$):
-\[
+\begin{gather*}
 m_l = m_W + m_S - m_i, \qquad w = \frac{m_S}{m_W+m_S-m_i};
-\qquad
+\\
 \frac{\dd m_l}{\dd m_m} = 1,\qquad \frac{\dd w}{\dd m_m} = -\frac{m_S}{m_l^2} = -\frac{w}{m_l}\quad(\dd m_m = -\dd m_i).
-\]
+\end{gather*}
 Whether $\bar w = m_S/(m_W+m_S)$ lies below or above $w_E$ decides which phase runs out first on the plateau.
 
 \begin{result}{Result 7 --- mass constraints}
@@ -627,11 +627,12 @@ C_d\frac{\dd T_d}{\dd t} = -\Qdb, \qquad
 \]}
 with the regime chosen by the Step 9 threshold table, $W = b_1\vartheta+b_2\vartheta^2+b_3\vartheta^3$
 ($W=100w$, $\vartheta=-\Tliq$), and
-\[
+\begin{gather*}
 \Hb_{E0} = m_W(c_iT_E - L_f) + m_Sc_hT_E,\quad
-\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b-(1-w_E)c_i-w_Ec_h\big],\quad
+\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b-(1-w_E)c_i-w_Ec_h\big],
+\\
 \bar w = \frac{m_S}{m_W+m_S}.
-\]
+\end{gather*}
 
 \sub{13.4 Equivalent explicit form} (for Desmos / Mathematica; integrate the $\Hb$ form, which carries the plateau without dividing by $\Ceff=\infty$):
 \[
