@@ -115,7 +115,7 @@ Each row is a constant that does not depend on this experiment. Where a property
 temperature, the value is taken where the model uses it, and the note says how much it changes.
 
 {\small
-\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{9.6cm}}
+\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}p{8.9cm}}
 \caption*{\normalsize\textbf{Table 1.} Constants substituted in this document}\\
 \toprule
 \text{Symbol} & Value & What it is \\
@@ -162,23 +162,28 @@ K_f & 1.86\,K\,kg\,mol$^{-1}$ & Cryoscopic constant of water: freezing-point dro
 \Lambda_E & 241\,450\,J\,kg$^{-1}$ & Heat needed to turn ice and salt at $T_E$ into 1\,kg of eutectic
   brine. Derived in Step~9. \\[3pt]
 \multicolumn{3}{@{}l}{\textit{Liquids moving by free convection}}\\
-k_d,\,\rho_d & 0.589\,W\,m$^{-1}$K$^{-1}$, 999.1\,kg\,m$^{-3}$ & Thermal conductivity and density of water at
-  $15\dC$, the middle of the drink's 28-to-$5\dC$ range. A soft drink is about 90\,\% water. \\
-\nu,\ \alpha & $1.139\times10^{-6}$, $1.408\times10^{-7}$\,m$^2$\,s$^{-1}$ & Kinematic viscosity (how
-  quickly momentum diffuses) and thermal diffusivity (how quickly heat diffuses) of water at $15\dC$. \\
+k_d & 0.589\,W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of water at $15\dC$, the middle of the drink's
+  28-to-$5\dC$ range. A soft drink is about 90\,\% water, so the drink is given water's properties. \\
+\rho_d & 999.1\,kg\,m$^{-3}$ & Density of water at $15\dC$. \\
+\nu & $1.139\times10^{-6}$\,m$^2$\,s$^{-1}$ & Kinematic viscosity of water at $15\dC$: how quickly
+  momentum diffuses through it. \\
+\alpha & $1.408\times10^{-7}$\,m$^2$\,s$^{-1}$ & Thermal diffusivity of water at $15\dC$, $k_d/(\rho_dc_p)$:
+  how quickly heat diffuses through it. \\
 \beta & $1.51\times10^{-4}$\,K$^{-1}$ & Thermal expansion coefficient of water at $15\dC$: the fractional
   fall in density per kelvin of warming. It is 0 at $4\dC$, $0.88\times10^{-4}$ at 10 and
   $2.07\times10^{-4}$ at $20\dC$. \\
 \mathrm{Pr} & 8.1 & Prandtl number of water at $15\dC$, $\nu/\alpha$. \\
-k_b,\,\rho_b & 0.54\,W\,m$^{-1}$K$^{-1}$, 1182\,kg\,m$^{-3}$ & Conductivity and density of eutectic brine
-  near $-15\dC$ (Melinder 2010). \\
-\nu_b,\ \alpha_b & $4.6\times10^{-6}$, $1.38\times10^{-7}$\,m$^2$\,s$^{-1}$ & Kinematic viscosity and
-  thermal diffusivity of the same brine; Prandtl number about 33. \\
+k_b & 0.54\,W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of eutectic brine near $-15\dC$ (Melinder 2010). \\
+\rho_b & 1182\,kg\,m$^{-3}$ & Density of eutectic brine. \\
+\nu_b & $4.6\times10^{-6}$\,m$^2$\,s$^{-1}$ & Kinematic viscosity of eutectic brine near $-15\dC$: four
+  times water's at $15\dC$, because it is cold and salty. \\
+\alpha_b & $1.38\times10^{-7}$\,m$^2$\,s$^{-1}$ & Thermal diffusivity of the same brine. With $\nu_b$ it
+  gives a Prandtl number of about 33. \\
 C_i,\ C_o & 0.62, 0.64 & Constants of laminar free convection on a vertical wall, Churchill \& Chu (1975),
   $0.670/[1 + (0.492/\mathrm{Pr})^{9/16}]^{4/9}$, at $\mathrm{Pr} = 8.1$ (drink) and 33 (brine). \\[3pt]
 \multicolumn{3}{@{}l}{\textit{Container and box materials}}\\
 c_c & 900\,J\,kg$^{-1}$K$^{-1}$ & Specific heat of aluminium, the can. \\
-k_w & 160 or 0.2\,W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of the container wall: can-body aluminium alloy
+k_w & 160 (can) or 0.2 (bottle) W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of the container wall: can-body aluminium alloy
   (pure aluminium 237), or PET for a plastic bottle. \\
 k_{\mathrm{box}} & 0.035\,W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of expanded polystyrene (styrofoam);
   0.033--0.038 depending on the foam's density. \\
@@ -192,7 +197,7 @@ Source column: \textbf{M} measured on this rig, \textbf{C} chosen by the experim
 derived here, \textbf{S} a state variable that changes during a run.
 
 {\small
-\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{8.4cm} l l}
+\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{7.9cm} l l}
 \caption*{\normalsize\textbf{Table 2.} Symbols that stay symbols}\\
 \toprule
 \text{Symbol} & Meaning & Unit & Src \\
@@ -794,10 +799,10 @@ brine adds exactly $c_w$ to its heat capacity.
 
 \sub{8.2 Total enthalpy.} Enthalpy is extensive: the bath's is the sum of mass times specific enthalpy over
 its parts, all at the one temperature $T_b$ (A3):
-\begin{multline*}
-\Hb = m_i(2000\,T_b - 333\,550) + m_l\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big]\\
-+ 864\,m_hT_b\ \ [+\,C_tT_b].
-\end{multline*}
+\begin{align*}
+\Hb &= m_i(2000\,T_b - 333\,550) + m_l\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big]\\
+&\quad + 864\,m_hT_b\ \ [+\,C_tT_b].
+\end{align*}
 The last term is there if the tank glass is counted with the bath (A2).
 
 \sub{8.3 First law for the bath.} The bath is at constant pressure and does no work: as in Step~1, its
@@ -841,10 +846,10 @@ is that of the brine alone, which is linear in $T_b$:
 \sub{R-II --- ice and brine on the freezing curve.} No crystals ($m_h=0$); this regime exists only if
 $\bar w<w_E$. The brine sits on the freezing curve, $T_b = \Tliq(w)$, and Step~7 gives $m_l = m_S/w$ and
 $m_i = m_W + m_S - m_S/w$. Putting these into $\Hb$ makes it a function of $w$ alone:
-\begin{multline*}
-\Hb_{\mathrm{II}}(w) = \Big(m_W+m_S-\frac{m_S}{w}\Big)\big(2000\,\Tliq(w) - 333\,550\big)\\
-+ \frac{m_S}{w}(4180 - 4400\,w)\,\Tliq(w) + 66\,400\,m_S .
-\end{multline*}
+\begin{align*}
+\Hb_{\mathrm{II}}(w) &= \Big(m_W+m_S-\frac{m_S}{w}\Big)\big(2000\,\Tliq(w) - 333\,550\big)\\
+&\quad + \frac{m_S}{w}(4180 - 4400\,w)\,\Tliq(w) + 66\,400\,m_S .
+\end{align*}
 It is solved for $w$ between $\bar w$ and $w_E$. There is exactly one root: adding heat melts ice
 ($\dd\Hb/\dd m_m = \Leff > 0$, Step~10), and melting dilutes the brine ($\dd w/\dd m_m < 0$), so $\Hb_{\mathrm{II}}$
 falls steadily as $w$ rises. Then $T_b = \Tliq(w)$.
@@ -873,10 +878,10 @@ out first, and the bath leaves into R-II; if $\bar w>w_E$ the ice runs out first
 \sub{R-IV --- saturated brine and crystals, no ice.} Only if $\bar w>w_E$. All the water is liquid,
 $m_l = m_W/(1-w)$, and the brine is saturated, $w = \wsat(T_b) = 0.2318 + 1.458\times10^{-3}(T_b + 21.2)$; the
 rest of the salt is crystals, $m_h = m_S - w\,m_l$. Then $\Hb$ is a function of $T_b$ alone:
-\begin{multline*}
-\Hb_{\mathrm{IV}}(T_b) = \frac{m_W}{1-w}\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big]\\
-+ \Big(m_S - \frac{w\,m_W}{1-w}\Big)864\,T_b,
-\end{multline*}
+\begin{align*}
+\Hb_{\mathrm{IV}}(T_b) &= \frac{m_W}{1-w}\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big]\\
+&\quad + \Big(m_S - \frac{w\,m_W}{1-w}\Big)864\,T_b,
+\end{align*}
 solved for $T_b$ between $T_E$ and $T_\star$, the temperature at which all the salt would just dissolve,
 $\wsat(T_\star)=\bar w$, that is $T_\star = -21.2 + (\bar w - 0.2318)/(1.458\times10^{-3})$.
 
@@ -1113,7 +1118,7 @@ kg and $^\circ$C:
 with the regime chosen by the thresholds of Step~9, and
 \begin{gather*}
 W = 1.78\,\vartheta - 0.0442\,\vartheta^2 + 5.572\times10^{-4}\,\vartheta^3\ \ (W=100w,\ \vartheta=-\Tliq),\\
-\wsat(T) = 0.2318 + 1.458\times10^{-3}(T + 21.2),\qquad
+\wsat(T) = 0.2318 + 1.458\times10^{-3}(T + 21.2),\\
 \Hb_{E0} = -375\,950\,m_W - 18\,317\,m_S,\qquad
 \bar w = \frac{m_S}{m_W+m_S}.
 \end{gather*}
@@ -1143,7 +1148,7 @@ T_d(0) = T_{d0},\qquad m_W = m_{i0}+m_{w0},\\
 \sub{13.7 What has to be measured.}
 
 {\small
-\begin{tabularx}{\linewidth}{l X X}
+\begin{tabularx}{\linewidth}{l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
 \toprule
 Group & Parameters & How they are fixed \\
 \midrule
