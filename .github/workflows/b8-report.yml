@@ -48,10 +48,11 @@ jobs:
       - name: Build the report (until the cross-references and contents settle)
         run: |
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct -- B8-salted-ice-bath.tex figs fonts)" FORCE_SOURCE_DATE=1
-          xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex > /dev/null
-          xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex > /dev/null
-          xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex
-          grep -E "Overfull|Rerun" B8-salted-ice-bath.log || echo "no overfull lines, nothing to rerun"
+          for pass in 1 2 3; do
+            xelatex -interaction=nonstopmode -halt-on-error B8-salted-ice-bath.tex > /dev/null \
+              || { grep -A8 '^!' B8-salted-ice-bath.log; exit 1; }   # show the TeX error
+          done
+          grep -E "Output written|Overfull|Rerun" B8-salted-ice-bath.log
           if grep -E "undefined references|Reference .* undefined|Citation .* undefined" B8-salted-ice-bath.log; then
             echo "::error::the report has undefined references"; exit 1
           fi
@@ -59,10 +60,11 @@ jobs:
       - name: Build the model derivation (until the contents settle)
         run: |
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct -- B8-model-derivation.tex)" FORCE_SOURCE_DATE=1
-          pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex > /dev/null
-          pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex > /dev/null
-          pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex
-          grep -E "Overfull|Rerun" B8-model-derivation.log || echo "no overfull lines, nothing to rerun"
+          for pass in 1 2 3; do
+            pdflatex -interaction=nonstopmode -halt-on-error B8-model-derivation.tex > /dev/null \
+              || { grep -A8 '^!' B8-model-derivation.log; exit 1; }   # show the TeX error
+          done
+          grep -E "Output written|Overfull|Rerun" B8-model-derivation.log
 
       - name: Keep the PDFs and the logs with the run
         if: always()

@@ -33,10 +33,11 @@
 \newcommand{\Ceff}{C_{\mathrm{eff}}}
 \newcommand{\UAbox}{UA_{\mathrm{box}}}
 \newcommand{\Tenv}{T_{\mathrm{env}}}
-\newcommand{\Pst}{P_{\mathrm{stir}}}
 \newcommand{\Tabs}{\mathcal{T}}
+\newcommand{\dC}{\,{}^{\circ}\mathrm{C}}
 \newcommand{\step}[1]{\section*{#1}\addcontentsline{toc}{section}{#1}}
 \newcommand{\sub}[1]{\par\smallskip\noindent\textbf{#1}\enspace}
+\newcommand{\means}{\par\noindent\textbf{What it means.}\enspace}
 
 \setlist{itemsep=2pt,topsep=4pt}
 \setlength{\parindent}{0pt}
@@ -51,651 +52,1147 @@
 \vspace{-1em}
 
 \begin{center}
-\begin{minipage}{0.88\linewidth}\small
-The current model is two coupled lumped systems --- the drink, described by its temperature $T_d$,
-and the bath, described by its total enthalpy $\Hb$ --- joined by one heat flow, $UA(T_d - T_b)$.
-This document derives both equations from conservation laws and closes them with phase equilibrium
-and convection correlations. No numbers are substituted; every result is left in symbols.
-Step~13 collects every result into the closed equation set.
+\begin{minipage}{0.9\linewidth}\small
+The model has two parts. The drink is described by one temperature $T_d$. The bath --- ice, brine and
+undissolved salt --- is described by its total enthalpy $\Hb$, the heat it holds counted from a
+reference state. One heat flow, $UA(T_d - T_b)$, joins them, and a second, through the styrofoam box,
+brings heat in from the room. Nothing stirs the bath or the drink.
+
+This document derives the two equations from the conservation of energy and mass and closes them with
+the phase diagram of salt water and the laws of heat transfer, explaining every step. Physical
+constants and handbook properties of water, ice, salt, brine and the container materials are put in as
+numbers, each with a note on what it is (Table~1). Anything that belongs to this rig --- masses, sizes,
+starting temperatures, film coefficients, the box's conductance --- stays a symbol, to be measured.
+Step~13 collects the results into the closed set of equations; Step~14 solves the cases that have a
+formula.
 \end{minipage}
 \end{center}
 
 \tableofcontents
 
 % ---------------------------------------------------------------
-\step{Scope and conventions}
+\step{How to read this document}
 
-\textbf{What ``current model'' means.} The 24 Oct salted-ice-bath model: lumped drink,
-enthalpy-based bath with a regime map (liquid / liquidus / eutectic plateau / saturated / solid),
-Bodnar liquidus, box leak and stirrer power, with the $\Delta T^{1/4}$ convection law as a switchable
-option. The buffered eutectic bath (COMSOL v1) falls out as a special case.
+\textbf{What ``the model'' is.} The 24 Oct salted-ice-bath model, \texttt{b8\_sim.py} in the
+repository: a lumped drink; a bath described by its enthalpy, with a map of the five states it can be in
+(liquid, ice on the freezing curve, the eutectic plateau, saturated brine with salt, solid); Bodnar's
+freezing curve; and the leak of heat through the box. The $\Delta T^{1/4}$ convection law is an option
+for the heat path. The buffered eutectic bath (COMSOL v1) is a special case.
 
-\textbf{How to read it.} Each step states its assumptions, derives, and ends in a boxed
-\textbf{Result}. Step 13 collects every Result into the closed equation set; Step 14 gives the
-special cases with closed-form solutions.
+\textbf{No stirrer.} Nothing stirs the drink or the bath. Fluid moves only by free convection: liquid
+warmer than its surroundings is lighter and rises, colder liquid sinks. That fixes which convection laws
+apply (Step~5) and makes the well-mixed bath (assumption A3) the strongest assumption here.
+
+\textbf{How each step is laid out.} It opens with the question it answers and the assumptions it uses.
+Each line of algebra is followed by what was done and why. It ends in a boxed \textbf{Result} and a
+short note on what the result means.
+
+\textbf{Which quantities become numbers.} A number is put in only for a constant that would be the same
+in any laboratory: a physical constant, or a handbook property of a pure substance or a standard
+material. These are listed, and explained, in Table~1. The heat capacities, latent heat, heat of solution and
+phase diagram are the values \texttt{b8\_sim.py} uses, so the bath formulas here reproduce its numbers. Everything set by this rig stays a symbol (Table~2), because it
+has to be measured.
 
 \textbf{Conventions.}
 \begin{itemize}
-  \item Bath and drink temperatures are in $^\circ$C, because the Bodnar liquidus and the enthalpy
-        reference are defined at $0\,^\circ$C. Absolute temperature (K) appears only in the
-        phase-equilibrium derivation (Step 6), written $\Tabs$.
-  \item Salt content $w$ is a mass fraction (0--1). Bodnar's fit is in wt\,\%, so it is written with $W = 100w$.
-  \item A heat flow is positive in the direction its subscript names: $\Qdb$ flows drink $\to$ bath,
-        $\dot Q_{\mathrm{leak}}$ flows environment $\to$ bath.
-  \item Enthalpy reference state: pure liquid water and solid NaCl, both at $0\,^\circ$C, have zero enthalpy.
+  \item SI units throughout: J, kg, m, s, W. An enthalpy is in J, a heat flow in W.
+  \item Temperatures $T$ are in $^\circ$C, because the enthalpy reference and Bodnar's fit are defined
+        at $0\dC$. A temperature \emph{difference} is the same in K and $^\circ$C. Absolute temperature,
+        in K, appears only in the phase-equilibrium derivation (Step~6), written $\Tabs$.
+  \item Salt content $w$ is a mass fraction: kg of NaCl per kg of brine, between 0 and 1. Bodnar's fit
+        uses weight per cent, $W = 100w$.
+  \item A heat flow is positive in the direction its subscript names: $\Qdb$ flows from the drink to the
+        bath, $\dot Q_{\mathrm{leak}}$ from the room to the bath.
+  \item Enthalpy reference: liquid water and solid NaCl, both at $0\dC$, have zero enthalpy. Any
+        reference would do, because only differences of enthalpy are ever used; this one makes the
+        enthalpy of ice at $0\dC$ equal to minus its latent heat.
 \end{itemize}
 
 % ---------------------------------------------------------------
-\step{Nomenclature}
+\step{Constants put in as numbers}
 
-Source column: \textbf{M} measured on this rig, \textbf{T} tabulated / literature,
-\textbf{D} derived here, \textbf{S} state variable.
+Each row is a constant that does not depend on this experiment. Where a property changes with
+temperature, the value is taken where the model uses it, and the note says how much it changes.
 
 {\small
-\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{7.1cm} l l}
+\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{9.6cm}}
+\caption*{\normalsize\textbf{Table 1.} Constants substituted in this document}\\
+\toprule
+\text{Symbol} & Value & What it is \\
+\midrule
+\endfirsthead
+\toprule
+\text{Symbol} & Value & What it is \\
+\midrule
+\endhead
+\multicolumn{3}{@{}l}{\textit{Physical constants}}\\
+g & 9.81\,m\,s$^{-2}$ & Acceleration due to gravity at the Earth's surface. It sets the buoyancy that
+  drives free convection. \\
+R & 8.314\,J\,mol$^{-1}$K$^{-1}$ & Molar gas constant: Boltzmann's constant times Avogadro's number. It
+  converts temperature into energy per mole in the chemical potential. \\
+\Tabs_0 & 273.15\,K & Melting point of pure ice at atmospheric pressure: $0\dC$ on the absolute scale. \\
+M_w & 0.018015\,kg\,mol$^{-1}$ & Molar mass of water, H$_2$O. \\
+M_s & 0.05844\,kg\,mol$^{-1}$ & Molar mass of sodium chloride, NaCl. \\
+\nu_i & 2 & Particles each formula unit of NaCl gives in water: Na$^+$ and Cl$^-$. \\
+j_{0,1} & 2.405 & First zero of the Bessel function $J_0$; it fixes the slowest cooling pattern of a
+  conducting cylinder (Step~3). \\[3pt]
+\multicolumn{3}{@{}l}{\textit{Water, ice and salt}}\\
+L_f & 333\,550\,J\,kg$^{-1}$ & Latent heat of fusion of ice at $0\dC$: the heat that melts 1\,kg of
+  ice at $0\dC$ without warming it. \\
+\Delta h_{\mathrm{fus}} & 6009\,J\,mol$^{-1}$ & The same per mole, $L_fM_w$. \\
+c_w & 4180\,J\,kg$^{-1}$K$^{-1}$ & Specific heat of liquid water: the heat that warms 1\,kg by 1\,K
+  (4180--4220 between $30$ and $0\dC$). \\
+c_i & 2000\,J\,kg$^{-1}$K$^{-1}$ & Specific heat of ice. It falls with temperature, from 2097 at $0\dC$
+  to 1950 at $-20\dC$ (IAPWS R10-06); 2000 is its value near $-13\dC$, where the bath works. \\
+c_h & 864\,J\,kg$^{-1}$K$^{-1}$ & Specific heat of solid NaCl (halite), 50.5\,J\,mol$^{-1}$K$^{-1}$. \\
+c_b(w) & $4180 - 4400\,w$ J\,kg$^{-1}$K$^{-1}$ & Specific heat of brine. Dissolved salt lowers it; this
+  straight line gives 3300 at $w = 0.20$ and 3160 at $w_E$, 2--5\,\% below the handbook values (3370 and
+  3310, Melinder 2010). \\
+\Delta h_s & 66\,400\,J\,kg$^{-1}$ & Heat absorbed in dissolving 1\,kg of NaCl in water (3.88\,kJ\,mol$^{-1}$,
+  measured at $25\dC$ in dilute solution). Positive: dissolving salt cools the water. \\[3pt]
+\multicolumn{3}{@{}l}{\textit{The NaCl--water phase diagram}}\\
+b_1,\,b_2,\,b_3 & 1.78, $-0.0442$, $5.572\times10^{-4}$ & Coefficients of Bodnar's (1993) fit to the
+  measured freezing curve of salt water, in wt\,\% against degrees below $0\dC$. \\
+T_E,\ w_E & $-21.2\dC$, 0.2318 & The eutectic: the coldest brine that can stay liquid, and its salt
+  content (the end of Bodnar's fit; handbooks give $-21.1\dC$ and 23.3\,wt\,\%). \\
+T_p,\ w_p & $+0.1\dC$, 0.26285 & The peritectic (Swenne 1983): below it the salt that crystallises from
+  saturated brine is hydrohalite, NaCl$\cdot$2H$_2$O, not halite. \\
+K_f & 1.86\,K\,kg\,mol$^{-1}$ & Cryoscopic constant of water: freezing-point drop per mole of dissolved
+  particles per kg of water. Derived in Step~6. \\
+\Lambda_E & 241\,450\,J\,kg$^{-1}$ & Heat needed to turn ice and salt at $T_E$ into 1\,kg of eutectic
+  brine. Derived in Step~9. \\[3pt]
+\multicolumn{3}{@{}l}{\textit{Liquids moving by free convection}}\\
+k_d,\,\rho_d & 0.589\,W\,m$^{-1}$K$^{-1}$, 999.1\,kg\,m$^{-3}$ & Thermal conductivity and density of water at
+  $15\dC$, the middle of the drink's 28-to-$5\dC$ range. A soft drink is about 90\,\% water. \\
+\nu,\ \alpha & $1.139\times10^{-6}$, $1.408\times10^{-7}$\,m$^2$\,s$^{-1}$ & Kinematic viscosity (how
+  quickly momentum diffuses) and thermal diffusivity (how quickly heat diffuses) of water at $15\dC$. \\
+\beta & $1.51\times10^{-4}$\,K$^{-1}$ & Thermal expansion coefficient of water at $15\dC$: the fractional
+  fall in density per kelvin of warming. It is 0 at $4\dC$, $0.88\times10^{-4}$ at 10 and
+  $2.07\times10^{-4}$ at $20\dC$. \\
+\mathrm{Pr} & 8.1 & Prandtl number of water at $15\dC$, $\nu/\alpha$. \\
+k_b,\,\rho_b & 0.54\,W\,m$^{-1}$K$^{-1}$, 1182\,kg\,m$^{-3}$ & Conductivity and density of eutectic brine
+  near $-15\dC$ (Melinder 2010). \\
+\nu_b,\ \alpha_b & $4.6\times10^{-6}$, $1.38\times10^{-7}$\,m$^2$\,s$^{-1}$ & Kinematic viscosity and
+  thermal diffusivity of the same brine; Prandtl number about 33. \\
+C_i,\ C_o & 0.62, 0.64 & Constants of laminar free convection on a vertical wall, Churchill \& Chu (1975),
+  $0.670/[1 + (0.492/\mathrm{Pr})^{9/16}]^{4/9}$, at $\mathrm{Pr} = 8.1$ (drink) and 33 (brine). \\[3pt]
+\multicolumn{3}{@{}l}{\textit{Container and box materials}}\\
+c_c & 900\,J\,kg$^{-1}$K$^{-1}$ & Specific heat of aluminium, the can. \\
+k_w & 160 or 0.2\,W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of the container wall: can-body aluminium alloy
+  (pure aluminium 237), or PET for a plastic bottle. \\
+k_{\mathrm{box}} & 0.035\,W\,m$^{-1}$K$^{-1}$ & Thermal conductivity of expanded polystyrene (styrofoam);
+  0.033--0.038 depending on the foam's density. \\
+\bottomrule
+\end{longtable}}
+
+% ---------------------------------------------------------------
+\step{Symbols kept as symbols}
+
+Source column: \textbf{M} measured on this rig, \textbf{C} chosen by the experimenter, \textbf{D}
+derived here, \textbf{S} a state variable that changes during a run.
+
+{\small
+\begin{longtable}{>{$}l<{$} >{\raggedright\arraybackslash}p{8.4cm} l l}
+\caption*{\normalsize\textbf{Table 2.} Symbols that stay symbols}\\
+\toprule
+\text{Symbol} & Meaning & Unit & Src \\
+\midrule
+\endfirsthead
 \toprule
 \text{Symbol} & Meaning & Unit & Src \\
 \midrule
 \endhead
-T_d & drink temperature (well-mixed core) & $^\circ$C & S \\
+T_d & drink temperature (its well-mixed core) & $^\circ$C & S \\
 T_b & bath temperature & $^\circ$C & D (from $\Hb$) \\
-\Tenv & ambient air outside the box & $^\circ$C & M \\
+\Tenv & room air outside the box & $^\circ$C & M \\
 \theta & drink--bath difference, $T_d - T_b$ & K & D \\
-m_d,\ c_d & drink mass, specific heat & kg, J\,kg$^{-1}$K$^{-1}$ & M, T \\
-m_c,\ c_c & container mass, specific heat & kg, J\,kg$^{-1}$K$^{-1}$ & M, T \\
-C_d & drink + container heat capacity & J\,K$^{-1}$ & D \\
-k_d,\rho_d,\nu,\alpha,\beta & drink conductivity, density, kinematic viscosity, diffusivity, expansion coefficient & SI & T \\
-r_i,\ r_o,\ H & container inner radius, outer radius, height & m & M \\
-t_w,\ k_w & wall thickness, wall conductivity & m, W\,m$^{-1}$K$^{-1}$ & M, T \\
+m_d,\ c_d & drink mass; drink specific heat (about 4000 for a sugary drink, 4180 for water or a diet drink) & kg, J\,kg$^{-1}$K$^{-1}$ & M \\
+m_c & container mass & kg & M \\
+C_d & heat capacity of drink + container & J\,K$^{-1}$ & D \\
+r_i,\ r_o,\ H & container inner radius, outer radius, height of the wetted wall & m & M \\
+t_w & wall thickness & m & M \\
 A_i,\ A_o & inner and outer wetted areas & m$^2$ & M \\
 h_i,\ h_o & drink-side and bath-side film coefficients & W\,m$^{-2}$K$^{-1}$ & D/M \\
-R_i,R_w,R_o,R_c & inner film, wall, outer film, contact (label) resistances & K\,W$^{-1}$ & D \\
-U,\ UA & overall coefficient, conductance & W\,m$^{-2}$K$^{-1}$, W\,K$^{-1}$ & M (fit) \\
-\mathrm{Bi,Nu,Ra,Re,Pr} & Biot, Nusselt, Rayleigh, Reynolds, Prandtl numbers & --- & D \\
-\Hb & total bath enthalpy & J & S \\
-m_W,\ m_S & total water (ice + liquid), total NaCl & kg & M \\
-m_i,\ m_l,\ m_h & ice, brine, undissolved solid salt & kg & D \\
-w,\ \bar w & brine salt fraction; overall fraction $m_S/(m_W+m_S)$ & --- & D \\
-\Tliq(w) & liquidus (ice--brine coexistence) temperature & $^\circ$C & T/M \\
-\wsat(T) & salt solubility curve & --- & T \\
-T_E,\ w_E & eutectic temperature and composition & $^\circ$C, --- & T \\
-b_1,b_2,b_3 & Bodnar (1993) coefficients: $1.78,\ -0.0442,\ 5.572\times10^{-4}$ & --- & T \\
-c_i,c_b,c_h,c_w & specific heats of ice, brine, solid NaCl, water & J\,kg$^{-1}$K$^{-1}$ & T \\
-L_f & latent heat of fusion of ice at $0\,^\circ$C & J\,kg$^{-1}$ & T \\
-\Delta h_s & enthalpy of solution per kg NaCl ($>0$ endothermic) & J\,kg$^{-1}$ & T \\
-\Leff,\ \Ceff & effective latent heat; effective bath heat capacity & J\,kg$^{-1}$, J\,K$^{-1}$ & D \\
-\Lambda_E & enthalpy to form 1 kg of eutectic brine from ice + salt & J\,kg$^{-1}$ & D \\
-\UAbox & box (EPS) conductance & W\,K$^{-1}$ & M \\
-\Pst & stirrer power dissipated in the bath & W & M \\
-\Tabs,\ \Tabs_0 & absolute temperature; 273.15 K & K & --- \\
-M_{\mathrm{H_2O}},\ M_{\mathrm{NaCl}} & molar masses & kg\,mol$^{-1}$ & T \\
-\Delta h_{\mathrm{fus}} & molar enthalpy of fusion of ice & J\,mol$^{-1}$ & T \\
-a_w,\ \varphi,\ \nu_i & water activity, osmotic coefficient, ions per formula unit (2) & --- & T \\
-b,\ K_f & molality; cryoscopic constant & mol\,kg$^{-1}$, K\,kg\,mol$^{-1}$ & D \\
-\tau,\ \tau_0,\ t^* & time constants & s & D \\
-n,\ a & exponent and prefactor in $\dot Q = a\theta^n$ & ---, W\,K$^{-n}$ & D/M \\
-T_{fd} & freezing point of the drink & $^\circ$C & T/M \\
+R_i,R_w,R_o,R_c & inner film, wall, outer film and contact (label) resistances & K\,W$^{-1}$ & D \\
+U,\ UA & overall heat-transfer coefficient; conductance & W\,m$^{-2}$K$^{-1}$, W\,K$^{-1}$ & M (fit) \\
+\mathrm{Bi,Nu,Ra} & Biot, Nusselt and Rayleigh numbers & --- & D \\
+\Hb & total enthalpy of the bath & J & S \\
+C_t & heat capacity of the tank glass, if counted with the bath & J\,K$^{-1}$ & M \\
+m_W,\ m_S & all the water (ice + liquid), all the NaCl & kg & M \\
+m_i,\ m_l,\ m_h & ice, brine, undissolved salt & kg & S \\
+m_m & mass of ice melted so far & kg & S \\
+w,\ \bar w & salt fraction of the brine; overall salt fraction $m_S/(m_W+m_S)$ & --- & S, D \\
+\Tliq(w) & freezing temperature of brine of salt fraction $w$ & $^\circ$C & D \\
+\wsat(T) & salt fraction of saturated brine at $T$ & --- & D \\
+\vartheta & degrees below zero on the freezing curve, $-\Tliq$ & K & D \\
+\Leff,\ \Ceff & effective latent heat; effective heat capacity of the bath & J\,kg$^{-1}$, J\,K$^{-1}$ & D \\
+C_B & heat capacity of the ice and brine together & J\,K$^{-1}$ & D \\
+\UAbox & conductance of the box from room to bath & W\,K$^{-1}$ & M \\
+A_{\mathrm{box}},\ \delta_{\mathrm{box}} & foam area and thickness & m$^2$, m & M \\
+\Delta\rho & density difference driving the brine film & kg\,m$^{-3}$ & D \\
+a_w,\ \varphi,\ b & water activity, osmotic coefficient, molality & ---, ---, mol\,kg$^{-1}$ & D \\
+\tau,\ \tau_0,\ t^*,\ \tau_c & time constants & s & D \\
+n,\ a & exponent and prefactor in $\Qdb = a\theta^n$ & ---, W\,K$^{-n}$ & D/M \\
+T^*,\ T_{fd} & target drink temperature; freezing point of the drink & $^\circ$C & C, M \\
+m_{\mathrm{buf}} & salt to keep undissolved as a buffer & kg & C \\
 \bottomrule
 \end{longtable}}
 
 % ---------------------------------------------------------------
 \step{Step 0 --- System, control volumes and assumptions}
 
-The apparatus splits into two systems with heat capacity --- the drink and the bath --- and two
-treated as pure resistances --- the container wall and the box. Everything outside the box is a
-reservoir at $\Tenv$.
+\textbf{The question.} What are the parts of the rig, which of them store heat, and along which paths
+does heat move between them?
+
+A \emph{control volume} is a region with a boundary drawn round it, kept account of: what crosses the
+boundary changes what is inside. The rig splits into two volumes that store heat --- the drink and the
+bath --- and two that only resist its flow --- the container wall and the box. Everything outside the
+box is the room, so large that the heat it gives up does not change its temperature $\Tenv$.
 
 {\small
 \begin{tabularx}{\linewidth}{l X l X}
 \toprule
 Control volume & Contents & State & Exchanges heat with \\
 \midrule
-Drink (D) & liquid + container shell & $T_d$ & bath, through the wall \\
-Bath (B) & ice, brine, undissolved NaCl & $\Hb$ & drink; environment via box; stirrer work \\
-Container wall & Al or PET shell, label & --- & resistance only \\
+Drink (D) & liquid + container shell & $T_d$ & the bath, through the wall \\
+Bath (B) & ice, brine, undissolved NaCl & $\Hb$ & the drink; the room, through the box \\
+Container wall & aluminium or PET shell, label & --- & resistance only \\
 Box & EPS walls + lid & --- & resistance only \\
 \bottomrule
 \end{tabularx}}
 
 \medskip
-\textbf{Thermal circuit.}
+\textbf{Thermal circuit.} Heat flows like current in an electrical circuit: temperatures play the part of
+voltages, heat flows of currents, thermal resistances (K\,W$^{-1}$) of electrical ones, and heat
+capacities of capacitors, which store heat as their temperature changes.
 \[
 \underbrace{T_d}_{C_d}
 \;\xrightarrow{\;R_i\;}\; T_{wi}
 \;\xrightarrow{\;R_c+R_w\;}\; T_{wo}
 \;\xrightarrow{\;R_o\;}\;
 \underbrace{T_b}_{\Hb}
-\;\xleftarrow{\;1/\UAbox\;}\; \Tenv,
-\qquad \Pst \to \text{bath}
+\;\xleftarrow{\;1/\UAbox\;}\; \Tenv
 \]
+Heat leaves the drink through the film of drink on the inside of the wall ($R_i$), crosses the label
+and the wall ($R_c + R_w$), and enters the bath through the film of brine on the outside ($R_o$). The
+wall's two faces are at $T_{wi}$ and $T_{wo}$. From the other side, heat from the room leaks through the
+box into the bath. The drink stores heat in $C_d$; the bath stores it in its enthalpy $\Hb$, much of it
+as the latent heat of its ice.
 
 \begin{assume}
-\textbf{Assumptions.}
+\textbf{Assumptions,} each with the reason it is made and where it is tested.
 \begin{enumerate}[label=\textbf{A\arabic*}]
-\item \textbf{Drink well-mixed.} One temperature $T_d$ describes the liquid core; all variation sits in thin boundary layers. Tested in Step 3.
-\item \textbf{Wall and tank have negligible heat capacity}, or theirs is added to the system they touch (container into $C_d$; tank glass adds $C_tT_b$ to $\Hb$).
-\item \textbf{Bath well-mixed and at local phase equilibrium at every instant.}
-\item \textbf{Quasi-steady resistances.} Boundary layers respond faster than $T_d$ or $T_b$ change.
-\item \textbf{Constant pressure, lid on.} No evaporation, condensation or frost; radiation absorbed into $\UAbox$.
-\item \textbf{Constant properties}, except $h_i$ and $\beta$ (Step 5).
-\item \textbf{No hydrohalite, no metastability.} The salt-rich solid is anhydrous NaCl, the eutectic is the equilibrium $T_E$, nothing supercools.
-\item \textbf{Drink fully immersed} to a marked waterline: wetted area fixed.
-\item \textbf{Ideal sensors.} Probe lag and offsets are measurement corrections, not model terms.
+\item \textbf{Drink well-mixed.} One temperature $T_d$ describes the liquid core; all the change of
+  temperature sits in thin boundary layers at the wall. Free convection keeps the core mixed; Step~3
+  tests when that is enough.
+\item \textbf{Wall and tank store no heat}, or their heat capacity is added to the system they touch:
+  the can's to $C_d$, the tank glass's ($C_t$) to the bath. A can wall 0.1\,mm thick holds about 1\,\%
+  as much heat per kelvin as its drink.
+\item \textbf{Bath well-mixed and at phase equilibrium at every instant.} One temperature $T_b$ and one
+  salt fraction $w$ describe the whole bath, and ice, brine and salt are always in equilibrium. With no
+  stirrer this is the strongest assumption: brine next to the can warms first. The report and the
+  browser simulator relax it, splitting the bath into rings round the can and melting and dissolving at
+  finite rates.
+\item \textbf{Quasi-steady resistances.} The thin films and the wall reach their steady temperature
+  profile much faster (seconds) than $T_d$ or $T_b$ change (minutes), so each is described by a fixed
+  resistance.
+\item \textbf{Constant pressure, lid on.} Nothing evaporates or condenses, and no frost forms. Radiation
+  inside the box is counted in $\UAbox$.
+\item \textbf{Constant properties.} Each specific heat, latent heat and heat of solution is one number;
+  the brine's specific heat depends on its salt content through one fixed straight line. The
+  exceptions are $h_i$ and $\beta$ in the convection laws (Step~5).
+\item \textbf{The stable phase diagram, with salt booked as halite.} The freezing curve, the solubility
+  and the eutectic are the measured equilibrium ones. Undissolved salt is counted as anhydrous NaCl
+  (halite) in the mass and energy balances. Below $+0.1\dC$ the stable salt solid is really hydrohalite,
+  NaCl$\cdot$2H$_2$O, which locks up $2M_w/M_s = 0.62$\,kg of water per kg of salt; that bound water and
+  its heat are left out. Nothing supercools and no metastable phase forms.
+\item \textbf{Drink fully immersed} to a marked waterline, so its wetted area is fixed.
+\item \textbf{Ideal sensors.} Probe lag and offsets are corrections to the measurements, not terms in
+  the model.
 \end{enumerate}
 \end{assume}
 
 % ---------------------------------------------------------------
 \step{Step 1 --- First law for the drink}
 
-The drink plus container is a closed system at constant pressure doing no work, so
-$\dd H_D/\dd t = $ heat in $= -\Qdb$. With constant specific heats (A6) and one temperature (A1),
+\textbf{The question.} How fast does the drink's temperature fall for a given heat flow out of it?
+
+\sub{1.1 The first law at constant pressure.} The drink and its can form a closed system: no mass
+crosses its boundary. For a closed system the first law of thermodynamics says that its internal energy
+$E$ changes by the heat that enters it minus the work it does, $\dd E = \delta Q - p\,\dd V$. At constant
+pressure (A5) the work of expansion is folded in by using the enthalpy $H = E + pV$, since
+$\dd H = \dd E + p\,\dd V$ when $p$ is fixed. So $\dd H = \delta Q$: at constant pressure, \emph{heat in
+equals the rise of enthalpy}. The only heat crossing the boundary is $\Qdb$, flowing out, so
+\[ \frac{\dd H_D}{\dd t} = -\Qdb . \]
+
+\sub{1.2 The enthalpy of the drink.} The specific heat $c$ is defined by $\dd h = c\,\dd T$ for 1\,kg.
+Each kilogram of drink holds $c_d(T_d - T_{\mathrm{ref}})$ above a reference temperature, and each
+kilogram of can $c_c(T_d - T_{\mathrm{ref}})$, since the can is at the drink's temperature (A1, A2).
+Adding the two masses, with constant specific heats (A6),
 \[
-H_D = (m_d c_d + m_c c_c)(T_d - T_{\mathrm{ref}})
-\quad\Rightarrow\quad
-\frac{\dd H_D}{\dd t} = (m_d c_d + m_c c_c)\frac{\dd T_d}{\dd t} \equiv C_d\frac{\dd T_d}{\dd t}.
+H_D = (m_d c_d + m_c c_c)(T_d - T_{\mathrm{ref}}) \equiv C_d\,(T_d - T_{\mathrm{ref}}),
+\qquad
+\frac{\dd H_D}{\dd t} = C_d\frac{\dd T_d}{\dd t} .
 \]
+The reference drops out on differentiating. With aluminium's specific heat, $c_c = 900$\,J\,kg$^{-1}$K$^{-1}$:
+\[ C_d = m_d c_d + 900\,m_c \qquad (\text{J\,K}^{-1}). \]
+The drink's own specific heat $c_d$ stays a symbol because it depends on the drink: sugar lowers it,
+from water's 4180 to about 4000\,J\,kg$^{-1}$K$^{-1}$ for a sugary soft drink.
 
 \begin{result}{Result 1 --- drink energy balance}
-\[ C_d\,\frac{\dd T_d}{\dd t} = -\Qdb, \qquad C_d = m_d c_d + m_c c_c \]
+\[ C_d\,\frac{\dd T_d}{\dd t} = -\Qdb, \qquad C_d = m_d c_d + 900\,m_c \]
 \end{result}
-$m_d$ comes from weighing the drink full and empty, not from the external volume $\pi r_o^2 H$, which includes headspace.
+\means $C_d$ is the heat the drink and can give up for each kelvin they cool, so the drink cools at
+$\Qdb/C_d$ kelvin per second. A can's 13\,g of aluminium adds 12\,J\,K$^{-1}$ to the drink's 1300 or so:
+about 1\,\%. Weigh the drink full and empty to get $m_d$; the outside volume $\pi r_o^2H$ would include
+the gas in the headspace.
 
 % ---------------------------------------------------------------
 \step{Step 2 --- Heat path drink $\to$ bath as series resistances}
 
-\sub{2.1 Each layer carries the same heat flow} (A4):
+\textbf{The question.} How does the heat flow out of the drink depend on the two temperatures, and on
+the films and the wall it crosses?
+
+\sub{2.1 Each layer carries the same heat flow.} By A4 the films and the wall store no heat, so whatever
+heat enters one face of a layer leaves the other. The same $\Qdb$ therefore crosses all three, each
+driven by the temperature drop across it and opposed by its resistance:
 \[ \Qdb = \frac{T_d - T_{wi}}{R_i} = \frac{T_{wi}-T_{wo}}{R_w} = \frac{T_{wo}-T_b}{R_o}. \]
 
-\sub{2.2 Film resistances} from Newton's law, $\dot Q = hA\,\Delta T$:
+\sub{2.2 Film resistances.} Next to a wall, a liquid moving by convection is held still in a thin film,
+which heat crosses only by conduction. Newton's law of cooling, $\dot Q = hA\,\Delta T$, sums that up in
+a film coefficient $h$, the heat flow per unit area per kelvin of drop. Comparing with
+$\dot Q = \Delta T/R$,
 \[ R_i = \frac{1}{h_iA_i}, \qquad R_o = \frac{1}{h_oA_o}. \]
+The film coefficients depend on how the liquid moves; Step~5 derives them.
 
-\sub{2.3 Wall resistance of a cylinder.} Fourier's law through a shell of height $H$, $\dot Q$ the same at every $r$:
-\[
+\sub{2.3 Wall resistance of a cylinder.} Fourier's law says heat flows down a temperature gradient in
+proportion to it: the flux is $-k_w\,\dd T/\dd r$ through a solid of conductivity $k_w$. Through the side
+wall of a cylinder of height $H$, it crosses the area $2\pi rH$ at radius $r$, and the total $\dot Q$ is
+the same at every radius (no storage, A4):
+\begin{gather*}
 \dot Q = -k_w(2\pi rH)\frac{\dd T}{\dd r}
 \;\Rightarrow\;
 \int_{r_i}^{r_o}\frac{\dd r}{r} = -\frac{2\pi k_wH}{\dot Q}\int_{T_{wi}}^{T_{wo}}\dd T
+\\
+\Rightarrow\;
+\ln\frac{r_o}{r_i} = \frac{2\pi k_wH}{\dot Q}\,(T_{wi}-T_{wo})
 \;\Rightarrow\;
-R_w = \frac{\ln(r_o/r_i)}{2\pi k_w H}.
-\]
-For a thin wall, $t_w = r_o - r_i \ll r_i$, $\ln(r_o/r_i)\approx t_w/r_i$ and $R_w \approx t_w/(k_wA)$.
-A label sleeve adds $R_c = R_c''/A$ in series.
+R_w = \frac{T_{wi}-T_{wo}}{\dot Q} = \frac{\ln(r_o/r_i)}{2\pi k_w H}.
+\end{gather*}
+The variables were separated ($r$ on one side, $T$ on the other) and both sides integrated across the
+wall. For a thin wall, $t_w = r_o - r_i \ll r_i$, the logarithm is $\ln(1 + t_w/r_i)\approx t_w/r_i$, so
+$R_w \approx t_w/(k_wA)$ with $A = 2\pi r_iH$: the wall acts as a flat slab. A label sleeve adds a
+contact resistance $R_c = R_c''/A$, with $R_c''$ its resistance per unit area, in series.
 
-\sub{2.4 Add the series.} Writing each equality as a temperature drop and summing, the wall temperatures cancel:
+\sub{2.4 Add the series.} Rearrange each equality in 2.1 as a temperature drop, $T_d - T_{wi} = \Qdb R_i$
+and so on, including the label's, and add them. The wall temperatures cancel in pairs:
 \[ T_d - T_b = \Qdb\,(R_i + R_c + R_w + R_o). \]
+Resistances in series add, because their temperature drops add while the heat flow is common.
 
-\sub{2.5 Faces in parallel.} Side, base and (if submerged) top are parallel paths $j$:
+\sub{2.5 Faces in parallel.} The side, the base and (if submerged) the top of the container are separate
+paths $j$ side by side, each with its own films and wall. Each carries its own heat flow driven by the
+same $T_d - T_b$, so the flows add, and with them the conductances (inverse resistances):
 \begin{gather*}
 UA = \sum_{j}\left(\frac{1}{h_{i,j}A_{i,j}} + R_{c,j} + R_{w,j} + \frac{1}{h_{o,j}A_{o,j}}\right)^{-1},
 \\
 \frac{1}{U} = \frac{1}{h_i} + R_c'' + \frac{t_w}{k_w} + \frac{1}{h_o}\ \ (\text{thin wall, } A_i\approx A_o\approx A).
 \end{gather*}
+The second line, for one face with a thin wall, multiplies every resistance by the common area: $U$ is
+the overall coefficient per unit area, and $UA$ the conductance in W\,K$^{-1}$.
 
-\sub{2.6 What the wall probe measures.}
+\sub{2.6 What a probe on the wall measures.} Dividing two of the drops in 2.4 gives the share of the
+temperature difference each part takes, as in a potential divider:
 \[ \frac{T_d - T_{wo}}{T_{wo}-T_b} = \frac{R_i+R_c+R_w}{R_o}. \]
+A probe taped to the outside of the can therefore reads neither the drink nor the bath.
 
-\textbf{Can versus bottle.} For aluminium $t_w/k_w \ll 1/h$, so $R_w$ drops out; PET keeps a finite $R_w$,
-which matters more once stirring shrinks $R_o$. Compare containers by $U$, not $\tau$.
+\textbf{Can versus bottle.} With can-body aluminium, $k_w = 160$\,W\,m$^{-1}$K$^{-1}$, a wall 0.1\,mm thick
+has $t_w/k_w = 6\times10^{-7}$\,m$^2$K\,W$^{-1}$; a film with $h = 300$ has $1/h = 3\times10^{-3}$, five
+thousand times more. So $R_w$ drops out for a can. With PET, $k_w = 0.2$, a wall 0.3\,mm thick has
+$t_w/k_w = 1.5\times10^{-3}$, half a film's resistance: a bottle's wall matters. Compare containers by
+$U$, not by their cooling time, which also depends on how much drink they hold (Step~4).
 
 \begin{result}{Result 2 --- heat flow from drink to bath}
 \[ \Qdb = UA\,(T_d - T_b), \qquad \frac{1}{UA} = R_i + R_c + R_w + R_o \]
 \end{result}
+\means The whole path from drink to bath is one conductance $UA$, and the heat flow is proportional
+to the temperature difference --- as long as the film coefficients do not themselves depend on it,
+which Step~5 revisits.
 
 % ---------------------------------------------------------------
 \step{Step 3 --- Biot number and when lumping is allowed}
 
-A still drink fails the lumping test, so A1 holds only because natural convection mixes the core:
-the model is a mixed core plus a thin boundary layer, not a conducting solid.
+\textbf{The question.} Is it fair to describe the whole drink by one temperature (A1)?
 
-\sub{3.1 The test.}
-\[
-\mathrm{Bi} = \frac{U_{\mathrm{ext}}L_c}{k_d}, \qquad
+\sub{3.1 The usual test.} Heat leaving a body meets two resistances in series: inside it, across a
+length $L_c$ of material of conductivity $k$, about $L_c/k$ per unit area; outside it, $1/U_{\mathrm{ext}}$.
+Their ratio is the Biot number,
+\begin{gather*}
+\mathrm{Bi} = \frac{U_{\mathrm{ext}}L_c}{k_d} = 1.70\,U_{\mathrm{ext}}L_c,
+\\
 \frac{1}{U_{\mathrm{ext}}} = R_c'' + \frac{t_w}{k_w} + \frac{1}{h_o}, \qquad
-L_c = \frac{V}{A}\ \text{or}\ r_i .
+L_c = \frac{V}{A}\ \text{or}\ r_i ,
+\end{gather*}
+with water's conductivity $k_d = 0.589$\,W\,m$^{-1}$K$^{-1}$ ($U_{\mathrm{ext}}$ in W\,m$^{-2}$K$^{-1}$, $L_c$
+in m). If $\mathrm{Bi} < 0.1$, the inside resistance is small, the temperature inside hardly varies, and a
+body that conducts can be lumped. A 330\,ml can has $V/A \approx 1.3$\,cm; with $U_{\mathrm{ext}}$ of a few
+hundred W\,m$^{-2}$K$^{-1}$, $\mathrm{Bi}$ is about 5 to 10. A still drink fails the test. The tiny Biot
+number often quoted for a can uses the aluminium's $k_w$ and $t_w$: it belongs to the wall, not the drink.
+
+\sub{3.2 How slowly a still drink would cool.} If the drink only conducted, the heat equation
+$\partial T/\partial t = \alpha\nabla^2T$ would hold inside it. In a long cylinder whose wall is held at a
+fixed temperature, separating variables gives patterns $J_0(\lambda r)\,e^{-\alpha\lambda^2t}$, where
+$J_0$ is a Bessel function; the wall condition $J_0(\lambda r_i) = 0$ allows $\lambda = j_{0,1}/r_i$ for the
+slowest pattern, $j_{0,1} = 2.405$. That pattern decays with time constant
+\[
+\tau_{\mathrm{cond}} = \frac{r_i^2}{\alpha\, j_{0,1}^2} = \frac{r_i^2}{1.408\times10^{-7}\times5.783}
+= 1.23\times10^{6}\,r_i^2\ \ \text{s}\qquad(r_i\ \text{in m}),
 \]
-Conduction-only lumping needs $\mathrm{Bi}<0.1$. The often-quoted tiny Biot number for an aluminium
-can uses $k_w$ and $t_w$: it is the \emph{wall's} Biot number.
+22 minutes for a can of radius 3.3\,cm: conduction alone would take more than an hour to cool it.
 
-\sub{3.2 A conducting drink} in a long cylinder with a fixed-temperature wall decays with
-\[ \tau_{\mathrm{cond}} = \frac{r_i^2}{\alpha\, j_{0,1}^2}, \qquad j_{0,1} = \text{first zero of } J_0 . \]
-
-\sub{3.3 The rescue.} Buoyancy drives a boundary layer of thickness $\delta \sim H\,\mathrm{Ra}_H^{-1/4} \ll r_i$;
-its resistance is $R_i$, already in the circuit. Enhancement: $E = \tau_{\mathrm{cond}}/\tau_{\mathrm{measured}}$.
+\sub{3.3 The rescue: free convection.} The drink is not still. Liquid cooled at the wall is denser and
+sinks in a thin layer down the wall, while the core is stirred by the circulation this sets up. Step~5
+shows that the layer is $\delta \sim H\,\mathrm{Ra}_H^{-1/4}$ thick, where $\mathrm{Ra}_H$ is the Rayleigh
+number; with water's properties,
+\[
+\delta \sim \frac{H^{1/4}}{310\,\Delta T_i^{1/4}} = 3.2\times10^{-3}\,H^{1/4}\,\Delta T_i^{-1/4}\ \ \text{m},
+\]
+with $H$ in m and $\Delta T_i$ in K: about 1\,mm for a can 11.7\,cm tall and a 10\,K drop: far thinner than the radius. All the temperature
+change sits in that layer, whose resistance is $R_i$, already in the circuit. The measured speed-up over
+conduction is $E = \tau_{\mathrm{cond}}/\tau_{\mathrm{measured}}$.
 
 \begin{result}{Result 3 --- lumping criterion}
 \[ \text{A1 holds if }\ \delta \sim H\,\mathrm{Ra}_H^{-1/4} \ll r_i\ \text{ and }\ |T_{\mathrm{top}} - T_{\mathrm{bottom}}| \ll T_d - T_b \quad(\text{not } \mathrm{Bi}<0.1) \]
 \end{result}
+\means The drink is a mixed core inside a thin cold layer, not a conducting solid. The test is whether
+the layer is thin and the core uniform, which a probe at the top and one at the bottom of the drink can
+check: cold liquid collects at the bottom, so the core does stratify slowly.
 
 % ---------------------------------------------------------------
 \step{Step 4 --- Fixed-bath solution}
 
-Combine Results 1 and 2 with $T_b$ constant and $\theta = T_d - T_b$:
+\textbf{The question.} If the bath stays at one temperature, how does the drink cool?
+
+\sub{4.1 Combine Results 1 and 2.} Put $\Qdb = UA(T_d - T_b)$ into $C_d\,\dd T_d/\dd t = -\Qdb$. With $T_b$
+constant, $\dd\theta/\dd t = \dd T_d/\dd t$ for the difference $\theta = T_d - T_b$, so
+\[ \frac{\dd\theta}{\dd t} = -\frac{\theta}{\tau},\qquad \tau \equiv \frac{C_d}{UA}. \]
+The difference falls at a rate proportional to itself; $\tau$ (seconds) is the drink's heat capacity over
+its conductance.
+
+\sub{4.2 Separate and integrate.} Put everything in $\theta$ on the left and in $t$ on the right, and
+integrate from the start, where $\theta = \theta_0$:
 \[
-\frac{\dd\theta}{\dd t} = -\frac{\theta}{\tau},\quad \tau \equiv \frac{C_d}{UA}
-\;\Rightarrow\;
 \int_{\theta_0}^{\theta}\frac{\dd\theta'}{\theta'} = -\int_0^t\frac{\dd t'}{\tau}
 \;\Rightarrow\;
 \ln\frac{\theta}{\theta_0} = -\frac{t}{\tau}.
 \]
 
-\sub{4.4 Derived quantities.}
+\sub{4.3 Solve for the temperature.} Exponentiate both sides and add back $T_b$: this gives Result~4. In
+each time $\tau$ the remaining difference shrinks by the factor $e = 2.718$.
+
+\sub{4.4 Derived quantities.} Setting $T_d = T^*$ and solving for $t$ gives the time to reach a target;
+differentiating at $t = 0$ gives the initial cooling rate:
 \[
 t_{T^*} = \tau\ln\frac{T_{d0}-T_b}{T^*-T_b}, \qquad
-\left.\frac{\dd T_d}{\dd t}\right|_0 = -\frac{T_{d0}-T_b}{\tau},
+\left.\frac{\dd T_d}{\dd t}\right|_0 = -\frac{T_{d0}-T_b}{\tau}.
 \]
+Two baths at $T_{b1}$ and $T_{b2}$ can be compared in two ways:
 \[
 \frac{t_{T^*}(T_{b1})}{t_{T^*}(T_{b2})} = \frac{\ln[(T_{d0}-T_{b1})/(T^*-T_{b1})]}{\ln[(T_{d0}-T_{b2})/(T^*-T_{b2})]},
 \qquad
 \frac{\dot T_d(0)|_{T_{b1}}}{\dot T_d(0)|_{T_{b2}}} = \frac{T_{d0}-T_{b1}}{T_{d0}-T_{b2}} .
 \]
-The two ratios differ: ``how much faster'' has two honest answers.
+The two ratios differ: ``how much faster does the colder bath cool the drink'' has two honest answers,
+one for the time to a target and one for the initial rate.
 
-\sub{4.5 Geometry inside $\tau$.} With $C_d \approx \rho_dc_dV$: $\ \tau = (\rho_dc_d/U)\,(V/A)$.
+\sub{4.5 Geometry inside $\tau$.} The drink's heat capacity is about $\rho_dc_dV$ for a volume $V$, so
+$\tau = (\rho_dc_d/U)\,(V/A)$: at the same $U$, a container with more drink per unit of wetted area cools
+more slowly.
 
 \begin{result}{Result 4 --- fixed-bath cooling curve}
 \[ T_d(t) = T_b + (T_{d0}-T_b)\,e^{-t/\tau}, \qquad \tau = \frac{C_d}{UA} \]
 \end{result}
+\means A plot of $\ln(T_d - T_b)$ against time is a straight line of slope $-1/\tau$; from its slope and
+the weighed $C_d$, $UA = C_d/\tau$.
 
 % ---------------------------------------------------------------
 \step{Step 5 --- Convection closures and the power-law cooling curve}
 
-\sub{5.1 Drink side, laminar natural convection} (length scale $H$, film drop $\Delta T_i = T_d - T_{wi}$):
+\textbf{The question.} What sets the film coefficients when nothing is stirred, and how does that change
+the cooling curve?
+
+\sub{5.1 Drink side: laminar free convection.} In the layer next to the wall the drink is colder by about
+$\Delta T_i = T_d - T_{wi}$, so denser by $\rho\beta\,\Delta T_i$: a buoyancy force $\rho g\beta\,\Delta T_i$
+per unit volume drives it down the wall. In a layer of thickness $\delta$ moving at speed $u$, viscosity
+resists with a force $\rho\nu u/\delta^2$; balancing the two gives $u \sim g\beta\Delta T_i\delta^2/\nu$.
+Heat carried along the wall over its height $H$, $u\Delta T_i/H$, must balance heat conducted across the
+layer, $\alpha\Delta T_i/\delta^2$. Eliminating $u$ gives $\delta \sim H\,\mathrm{Ra}_H^{-1/4}$, and since the
+film coefficient is about $k_d/\delta$,
 \[
 \mathrm{Ra}_H = \frac{g\beta\,\Delta T_i H^3}{\nu\alpha}, \qquad
-\mathrm{Nu}_H = \frac{h_iH}{k_d} = C_i\,\mathrm{Ra}_H^{1/4}
-\;\Rightarrow\;
-h_i = C_ik_d\left(\frac{g\beta}{\nu\alpha H}\right)^{1/4}\Delta T_i^{1/4} \equiv K_i\,\Delta T_i^{1/4}.
+\mathrm{Nu}_H = \frac{h_iH}{k_d} = C_i\,\mathrm{Ra}_H^{1/4} .
 \]
+The Rayleigh number compares buoyancy with the two diffusions, of momentum and of heat, that resist it;
+the Nusselt number compares the film coefficient with conduction over the height. The scaling fixes the
+power $\tfrac14$; the constant comes from experiments on vertical walls, $C_i = 0.62$ for water
+(Table~1). With water at $15\dC$,
+\[
+\mathrm{Ra}_H = \frac{9.81\times1.51\times10^{-4}}{1.139\times10^{-6}\times1.408\times10^{-7}}\,\Delta T_iH^3
+= 9.22\times10^{9}\,\Delta T_iH^3 .
+\]
+Solving the Nusselt relation for $h_i$ and putting in the numbers:
+\begin{gather*}
+h_i = C_ik_d\left(\frac{g\beta}{\nu\alpha H}\right)^{1/4}\Delta T_i^{1/4}
+= 0.62\times0.589\times310\;H^{-1/4}\,\Delta T_i^{1/4}
+\equiv K_i\,\Delta T_i^{1/4},
+\\
+K_i = 112\,H^{-1/4}
+\end{gather*}
+in W\,m$^{-2}$K$^{-5/4}$ with $H$ in m. For an upright can 11.66\,cm tall, $K_i = 192$, and at a 25\,K drop
+$h_i = 430$\,W\,m$^{-2}$K$^{-1}$, close to the 400 measured on a bottle. Three remarks. The law holds while
+the layer is laminar, $\mathrm{Ra}_H < 10^9$, that is $\Delta T_iH^3 < 0.11$\,m$^3$K: always, here. Sugar
+makes a drink about a third more viscous than water, which lowers $K_i$ by under 10\,\%, since it enters
+as a quarter power. And for a can lying on its side, as in the rig, the height of the wall is its
+diameter, and the constant changes a little (Churchill \& Chu give a separate law for horizontal
+cylinders).
 
-\sub{5.2 Drink film dominant} ($R_i \gg R_c+R_w+R_o$, so $\Delta T_i\approx\theta$):
-$\ \Qdb = K_iA_i\,\theta^{5/4} \equiv a\,\theta^{5/4}$.
+\sub{5.2 When the drink's film dominates.} If $R_i$ is much larger than $R_c+R_w+R_o$, almost all the
+temperature difference falls across the drink's film, $\Delta T_i \approx \theta$. Then
+$\Qdb = h_iA_i\theta = K_iA_i\,\theta^{1/4}\theta$:
+\[ \Qdb = K_iA_i\,\theta^{5/4} \equiv a\,\theta^{5/4}. \]
+The heat flow grows faster than the difference, because a larger difference also thins the film.
 
-\sub{5.3 Integrate with $T_b$ fixed.}
+\sub{5.3 Integrate with $T_b$ fixed.} Result~1 becomes $C_d\,\dd\theta/\dd t = -a\theta^{5/4}$. Separate and
+integrate as in Step~4, using $\int\theta^{-5/4}\dd\theta = -4\theta^{-1/4}$:
 \[
 \int_{\theta_0}^{\theta}\theta'^{-5/4}\dd\theta' = -\frac{a}{C_d}\int_0^t\dd t'
 \;\Rightarrow\;
 \theta^{-1/4} = \theta_0^{-1/4} + \frac{at}{4C_d}
 \;\Rightarrow\;
-\theta(t) = \theta_0\left(1+\frac{t}{t^*}\right)^{-4},
+\theta(t) = \theta_0\left(1+\frac{t}{t^*}\right)^{-4}.
 \]
+The last step factored out $\theta_0^{-1/4}$ and raised both sides to the power $-4$, which defines
 \[
 t^* = \frac{4C_d}{a\,\theta_0^{1/4}} = 4\tau_0, \qquad \tau_0 = \frac{C_d}{h_i(\theta_0)A_i}.
 \]
+$\tau_0$ is the time constant the drink would have if its film kept its starting coefficient. The curve
+starts like an exponential with that time constant and then slows, as the film thickens.
 
-\sub{5.4 General exponent} ($\dot Q = a\theta^n$, $n\neq1$):
+\sub{5.4 Any exponent.} For $\dot Q = a\theta^n$ with $n\neq1$, the same steps with
+$\int\theta^{-n}\dd\theta = \theta^{1-n}/(1-n)$ give
 \[
 \theta^{1-n} = \theta_0^{1-n} + (n-1)\frac{a}{C_d}t
 \;\Rightarrow\;
 \theta(t) = \theta_0\big[1+(n-1)t/\tau_0\big]^{-1/(n-1)}, \qquad \tau_0 = \frac{C_d}{a\theta_0^{\,n-1}} .
 \]
-$n\to1$ recovers Result 4.
+As $n\to1$, $[1 + (n-1)x]^{-1/(n-1)} \to e^{-x}$ and Result~4 comes back.
 
-\sub{5.5 Exponent test.}
-\[ \ln\!\left(-\frac{\dd T_d}{\dd t}\right) = \ln\frac{a}{C_d} + n\ln(T_d - T_b). \]
+\sub{5.5 Testing the exponent.} Taking logarithms of $C_d\,\dd T_d/\dd t = -a(T_d-T_b)^n$,
+\[ \ln\!\left(-\frac{\dd T_d}{\dd t}\right) = \ln\frac{a}{C_d} + n\ln(T_d - T_b), \]
+so the slope of the log of the cooling rate against the log of the difference is $n$: 1 for a constant
+$U$, $\tfrac54$ for a convection-limited drink.
 
-\sub{5.6 Mixed resistances} (implicit in $\Qdb$):
-\[ \Qdb = K_iA_i\big[\theta - \Qdb\,(R_c+R_w+R_o)\big]^{5/4}, \qquad 1 \le n_{\mathrm{eff}} \le \tfrac54 . \]
+\sub{5.6 Mixed resistances.} When the other resistances are not small, the drink's film sees only part of
+$\theta$: what is left after the drop $\Qdb(R_c+R_w+R_o)$ across the rest. That makes $\Qdb$ implicit,
+\[ \Qdb = K_iA_i\big[\theta - \Qdb\,(R_c+R_w+R_o)\big]^{5/4}, \qquad 1 \le n_{\mathrm{eff}} \le \tfrac54 , \]
+and the effective exponent lies between the two limits.
 
-\sub{5.7 Bath side.}
-\[
-\text{unstirred: } \mathrm{Nu}_o = C_o\left(\frac{g\,\Delta\rho\,H^3}{\rho_b\nu_b\alpha_b}\right)^{1/4},
-\qquad
-\text{stirred: } \mathrm{Nu}_o = \frac{h_oD}{k_b} = C\,\mathrm{Re}^m\mathrm{Pr}^{1/3},\ \ \mathrm{Re} = \frac{u_\infty D}{\nu_b}.
-\]
+\sub{5.7 Bath side, unstirred.} The same reasoning applies to the brine on the outside of the can, except
+that its density difference $\Delta\rho$ comes from two causes: the brine at the wall is warmer, and the
+ice it melts dilutes it. Both make it lighter, so it rises along the wall. Writing the Rayleigh number with
+$\Delta\rho$ directly,
+\begin{gather*}
+\mathrm{Nu}_o = \frac{h_oH}{k_b} = C_o\left(\frac{g\,\Delta\rho\,H^3}{\rho_b\nu_b\alpha_b}\right)^{1/4}
+\\
+\Rightarrow\;
+h_o = C_ok_b\left(\frac{g}{\rho_b\nu_b\alpha_b}\right)^{1/4}\Delta\rho^{1/4}H^{-1/4}
+= 118\,\Delta\rho^{1/4}H^{-1/4}
+\end{gather*}
+in W\,m$^{-2}$K$^{-1}$, with $\Delta\rho$ in kg\,m$^{-3}$ and $H$ in m, using eutectic brine's properties
+($C_o = 0.64$, $k_b = 0.54$, $\rho_b = 1182$, $\nu_b = 4.6\times10^{-6}$, $\alpha_b = 1.38\times10^{-7}$).
+$\Delta\rho$ stays a symbol: it depends on how warm the wall is and how much meltwater it makes. On a
+can 11.7\,cm tall, a few kg\,m$^{-3}$ gives $h_o$ of 250--300\,W\,m$^{-2}$K$^{-1}$.
 
-\sub{5.8 Caveat --- $\beta(T)$.} Near the density maximum use the density difference directly:
+\sub{5.8 Caveat: $\beta$ changes with temperature.} Water is densest at $4\dC$, where $\beta = 0$; below
+that it expands on cooling. Dissolved sugar and CO$_2$ move the maximum a little lower. As the drink
+approaches it the buoyancy in its film vanishes, and $\beta\,\Delta T_i$ must be replaced by the density
+difference itself:
 \[ \mathrm{Ra}_H = \frac{g\,[\rho_d(T_{wi})-\rho_d(T_d)]\,H^3}{\rho_d\,\nu\,\alpha}. \]
-Fit $n$ only over the early stretch of a run.
+Near the maximum the film coefficient falls sharply, so fit $n$ only over the early part of a run.
 
 \begin{result}{Result 5 --- convection closure and fixed-bath power law}
-\[ h_i = K_i(T_d - T_{wi})^{1/4}, \qquad \Qdb = a\theta^n,\ 1\le n\le\tfrac54, \qquad \theta(t) = \theta_0\left(1+\frac{t}{t^*}\right)^{-4}\ (n=\tfrac54) \]
+\begin{gather*}
+h_i = K_i(T_d - T_{wi})^{1/4},\qquad K_i = 112\,H^{-1/4}\\
+\Qdb = a\theta^n,\ 1\le n\le\tfrac54, \qquad \theta(t) = \theta_0\left(1+\frac{t}{t^*}\right)^{-4}\ (n=\tfrac54)
+\end{gather*}
 \end{result}
+\means With nothing stirred, the films set the rate, and each grows as the quarter power of its own
+temperature drop. A constant $U$ (Result~2) is the simplest fit to a run; the power law is the
+physically expected shape, and the exponent test of 5.5 tells them apart.
 
 % ---------------------------------------------------------------
 \step{Step 6 --- Phase equilibrium of the bath}
 
-\sub{6.1 Equilibrium condition.}
+\textbf{The question.} At what temperature can ice and brine of a given salt content coexist, how much
+salt can brine hold, and what is the coldest the bath can get?
+
+\sub{6.1 Equilibrium condition.} Water molecules can pass between the ice and the brine. They stop
+moving on balance when water has the same \emph{chemical potential} --- Gibbs energy per mole --- in both.
+Ice is pure, so its chemical potential is that of pure ice, $\mu_{\mathrm{ice}}$. In brine the dissolved
+ions dilute the water and lower its chemical potential below that of pure liquid water, $\mu_w^*$, by
+$R\Tabs\ln a_w$, where $a_w$ is the water's activity ($a_w = 1$ for pure water, less in brine) and
+$R = 8.314$\,J\,mol$^{-1}$K$^{-1}$. Equilibrium at absolute temperature $\Tabs$ needs
 \[
 \mu_{\mathrm{ice}}(\Tabs) = \mu_w^*(\Tabs) + R\Tabs\ln a_w
 \;\Rightarrow\;
-R\Tabs\ln a_w = -\Delta g_{\mathrm{fus}}(\Tabs).
+R\Tabs\ln a_w = -\Delta g_{\mathrm{fus}}(\Tabs),
 \]
+where $\Delta g_{\mathrm{fus}} = \mu_w^* - \mu_{\mathrm{ice}}$ is the Gibbs energy of melting one mole of
+ice.
 
-\sub{6.2 Gibbs--Helmholtz} with $\Delta g_{\mathrm{fus}}(\Tabs_0)=0$, $\Delta h_{\mathrm{fus}}$ constant:
-\[
+\sub{6.2 How $\Delta g_{\mathrm{fus}}$ changes with temperature.} The Gibbs--Helmholtz relation,
+$\dd(\Delta g/\Tabs)/\dd\Tabs = -\Delta h/\Tabs^2$, links it to the molar heat of melting,
+$\Delta h_{\mathrm{fus}} = L_fM_w = 6009$\,J\,mol$^{-1}$. Pure ice and water coexist at
+$\Tabs_0 = 273.15$\,K, so $\Delta g_{\mathrm{fus}}(\Tabs_0) = 0$. Integrating from $\Tabs_0$ with
+$\Delta h_{\mathrm{fus}}$ constant, and using 6.1,
+\begin{gather*}
 \frac{\Delta g_{\mathrm{fus}}}{\Tabs} = \Delta h_{\mathrm{fus}}\left(\frac{1}{\Tabs}-\frac{1}{\Tabs_0}\right)
 \;\Rightarrow\;
-\ln a_w = -\frac{\Delta h_{\mathrm{fus}}}{R}\left(\frac{1}{\Tabs}-\frac{1}{\Tabs_0}\right).
-\]
+\ln a_w = -\frac{\Delta h_{\mathrm{fus}}}{R}\left(\frac{1}{\Tabs}-\frac{1}{\Tabs_0}\right),
+\\
+\ln a_w = -722.7\left(\frac{1}{\Tabs}-\frac{1}{273.15}\right)
+\end{gather*}
+with $\Tabs$ in K. Brine of lower water activity is in equilibrium with ice at a lower temperature. Strictly
+$\Delta h_{\mathrm{fus}}$ is not constant: it falls by $(c_w - c_i)M_w = 39$\,J\,mol$^{-1}$ per kelvin below
+$0\dC$, about 14\,\% by the eutectic --- one reason the measured curve of 6.4 is used in the model.
 
-\sub{6.3 Dilute, ideal limit $\to$ Blagden.} $\ln a_w \approx -\nu_i b M_{\mathrm{H_2O}}$, $\Tabs\Tabs_0\approx\Tabs_0^2$:
-\[
-\Delta T_f = \underbrace{\frac{R\Tabs_0^2M_{\mathrm{H_2O}}}{\Delta h_{\mathrm{fus}}}}_{K_f}\nu_i b,
-\qquad b = \frac{w/M_{\mathrm{NaCl}}}{1-w};
-\qquad
-\frac{1}{\Tabs_{\mathrm{liq}}} = \frac{1}{\Tabs_0} + \frac{R}{\Delta h_{\mathrm{fus}}}\varphi(w)\,\nu_i\,b(w)\,M_{\mathrm{H_2O}}\ \ (\text{real brine}).
-\]
+\sub{6.3 The dilute limit: Blagden's law.} In dilute brine, $a_w$ is close to the mole fraction of water,
+$1 - x$, where $x$ is the mole fraction of dissolved particles, and $\ln(1-x)\approx -x$. Per kg of water
+there are $\nu_ib$ moles of particles, $b$ being the molality (moles of NaCl per kg of water), against
+$1/M_w$ moles of water, so $x \approx \nu_ibM_w$. Also
+$1/\Tabs - 1/\Tabs_0 = (\Tabs_0 - \Tabs)/(\Tabs\Tabs_0) \approx \Delta T_f/\Tabs_0^2$ for a small drop
+$\Delta T_f$. Equating,
+\begin{gather*}
+\Delta T_f = \underbrace{\frac{R\Tabs_0^2M_w}{\Delta h_{\mathrm{fus}}}}_{K_f}\nu_i b,
+\\
+K_f = \frac{8.314\times273.15^2\times0.018015}{6009} = 1.86\ \text{K\,kg\,mol}^{-1}.
+\end{gather*}
+The molality of brine of salt fraction $w$ is $b = (w/M_s)/(1-w) = 17.11\,w/(1-w)$\,mol\,kg$^{-1}$: per kg of
+brine, $w$\,kg of salt is $w/M_s$ moles, dissolved in $1-w$\,kg of water. With $\nu_i = 2$,
+\[ \Delta T_f = 2\times1.86\times17.11\,\frac{w}{1-w} = 63.6\,\frac{w}{1-w}\ \ \text{K}. \]
+At 1\,wt\,\% this gives 0.64\,K; the measured drop is 0.59\,K, because the ions are not independent
+particles. The osmotic coefficient $\varphi$ ($\approx 0.93$ here) corrects for that, $\ln a_w = -\varphi\nu_ibM_w$
+exactly, and then 6.2 gives, for real brine,
+\begin{gather*}
+\frac{1}{\Tabs_{\mathrm{liq}}} = \frac{1}{\Tabs_0} + \frac{R}{\Delta h_{\mathrm{fus}}}\varphi\,\nu_i\,b\,M_w ,
+\\
+\frac{1}{\Tabs_{\mathrm{liq}}} = \frac{1}{273.15} + 8.53\times10^{-4}\,\varphi(w)\,\frac{w}{1-w}\ \ \text{K}^{-1}.
+\end{gather*}
 
-\sub{6.4 Empirical liquidus (Bodnar 1993).} With $\vartheta = -\Tliq$ ($^\circ$C), $W=100w$:
-\[
-W = b_1\vartheta + b_2\vartheta^2 + b_3\vartheta^3,
-\qquad
-\frac{\dd\Tliq}{\dd w} = -\frac{100}{b_1 + 2b_2\vartheta + 3b_3\vartheta^2} < 0 .
-\]
+\sub{6.4 The measured freezing curve (Bodnar 1993).} Rather than tabulate $\varphi$, the model uses a fit to
+measured freezing points. With $\vartheta = -\Tliq$ the number of degrees below zero and $W = 100w$,
+\[ W = 1.78\,\vartheta - 0.0442\,\vartheta^2 + 5.572\times10^{-4}\,\vartheta^3 . \]
+Given $w$, the cubic is solved for $\vartheta$ between 0 and 21.2. Its slope follows from
+$\dd W/\dd\vartheta = 1.78 - 0.0884\,\vartheta + 1.672\times10^{-3}\,\vartheta^2$, with $\dd W = 100\,\dd w$ and
+$\dd\Tliq = -\dd\vartheta$:
+\[ \frac{\dd\Tliq}{\dd w} = -\frac{100}{1.78 - 0.0884\,\vartheta + 1.672\times10^{-3}\,\vartheta^2}\ \ \text{K} . \]
+It is negative --- more salt, colder freezing point --- and steepens from 0.56\,K per wt\,\% near $0\dC$ to
+1.52\,K per wt\,\% near the eutectic.
 
-\sub{6.5 Gibbs phase rule} at fixed pressure, $C=2$: $F = 3 - P$.
+\sub{6.5 The phase rule.} Gibbs's phase rule counts how many quantities can still be chosen freely, $F$,
+for $C$ components in $P$ phases: $F = C - P + 2$. The components are water and NaCl, $C = 2$, and the
+pressure is fixed, which uses up one: $F = 3 - P$.
 
 {\small
 \begin{tabularx}{\linewidth}{X c c X}
 \toprule
 Phases present & $P$ & $F$ & What is fixed \\
 \midrule
-brine & 1 & 2 & nothing \\
-ice + brine & 2 & 1 & $T = \Tliq(w)$ \\
-brine + solid salt & 2 & 1 & $w = \wsat(T)$ \\
-ice + brine + solid salt & 3 & 0 & $T=T_E$, $w=w_E$ \\
+brine & 1 & 2 & nothing: $T$ and $w$ are both free \\
+ice + brine & 2 & 1 & the temperature by the salt: $T = \Tliq(w)$ \\
+brine + solid salt & 2 & 1 & the salt by the temperature: $w = \wsat(T)$ \\
+ice + brine + solid salt & 3 & 0 & everything: $T=T_E$, $w=w_E$ \\
 ice + solid salt & 2 & 1 & $T$ free, below $T_E$ \\
 \bottomrule
 \end{tabularx}}
 
-\sub{6.6 Eutectic and solubility.}
+With ice, brine and salt all present, nothing is left to choose: the temperature is pinned at the
+eutectic, whatever heat comes in, until one of the three phases runs out.
+
+\sub{6.6 Eutectic and solubility.} The eutectic is where the freezing curve meets the solubility curve:
 \[
-\Tliq(w_E) = T_E,\qquad \wsat(T_E) = w_E,\qquad
-\wsat(T) \approx w_E + (w_p - w_E)\frac{T - T_E}{T_p - T_E}.
+\Tliq(w_E) = T_E,\qquad \wsat(T_E) = w_E,\qquad T_E = -21.2\dC,\ \ w_E = 0.2318 .
 \]
+Between the eutectic and the peritectic ($+0.1\dC$, $w_p = 0.26285$) the solubility is taken as the straight
+line between them, for $-21.2 \le T \le 0.1\dC$:
+\[
+\wsat(T) \approx w_E + (w_p - w_E)\frac{T - T_E}{T_p - T_E} = 0.2318 + 1.458\times10^{-3}\,(T + 21.2) .
+\]
+Saturated brine is a little saltier when warmer: 0.0015 per kelvin. At the peritectic it matches the
+handbook solubility of halite at $0\dC$, 35.65\,g per 100\,g of water, $w = 0.2628$.
 
 \begin{result}{Result 6 --- phase constraints}
-\[ \text{ice + brine: } T_b = \Tliq(w);\qquad \text{brine + salt: } w = \wsat(T_b);\qquad \text{all three: } T_b = T_E,\ w = w_E \]
+\begin{gather*}
+\text{ice + brine: } T_b = \Tliq(w);\qquad \text{brine + salt: } w = 0.2318 + 1.458\times10^{-3}(T_b + 21.2);\\
+\text{all three: } T_b = -21.2\dC,\ w = 0.2318
+\end{gather*}
 \end{result}
+\means The phase diagram ties the temperature to the salt content whenever two phases coexist, and pins
+both at the eutectic when three do. That is what makes a salted ice bath a thermostat.
 
 % ---------------------------------------------------------------
 \step{Step 7 --- Bath mass balances}
 
+\textbf{The question.} How are the amounts of ice, brine and salt related, given that water and salt are
+neither created nor destroyed?
+
+Water is in the ice and in the brine; salt is in the brine and in the undissolved crystals. A kilogram of
+brine holds $1-w$\,kg of water and $w$\,kg of salt. Counting each substance,
 \[
-m_W = m_i + (1-w)m_l, \qquad m_S = w\,m_l + m_h, \qquad m_W + m_S = m_i + m_l + m_h .
+m_W = m_i + (1-w)m_l, \qquad m_S = w\,m_l + m_h, \qquad m_W + m_S = m_i + m_l + m_h ,
 \]
-With no solid salt ($m_h=0$):
-\begin{gather*}
-m_l = m_W + m_S - m_i, \qquad w = \frac{m_S}{m_W+m_S-m_i};
-\\
-\frac{\dd m_l}{\dd m_m} = 1,\qquad \frac{\dd w}{\dd m_m} = -\frac{m_S}{m_l^2} = -\frac{w}{m_l}\quad(\dd m_m = -\dd m_i).
-\end{gather*}
-Whether $\bar w = m_S/(m_W+m_S)$ lies below or above $w_E$ decides which phase runs out first on the plateau.
+the third being the sum of the first two. While no salt is undissolved ($m_h=0$), these give the brine
+mass and its salt fraction from the ice alone:
+\[
+m_l = m_W + m_S - m_i, \qquad w = \frac{m_S}{m_W+m_S-m_i}.
+\]
+Melting a mass $\dd m_m$ of ice ($\dd m_i = -\dd m_m$) adds as much water to the brine, and the same salt
+is spread through more brine. Differentiating,
+\[
+\frac{\dd m_l}{\dd m_m} = 1,\qquad \frac{\dd w}{\dd m_m} = -\frac{m_S}{m_l^2} = -\frac{w}{m_l}.
+\]
+Melting always dilutes the brine. Whether the overall salt fraction $\bar w = m_S/(m_W+m_S)$ lies below or
+above $w_E$ decides which phase runs out first on the eutectic plateau (Step~9).
 
 \begin{result}{Result 7 --- mass constraints}
 \[ m_W = m_i + (1-w)m_l,\quad m_S = w\,m_l + m_h,\quad 0\le m_i\le m_W,\quad 0\le m_h\le m_S \]
 \end{result}
+\means Two numbers, the water and the salt put in, fix the bath's make-up; the state only decides how
+they are shared out between ice, brine and crystals.
 
 % ---------------------------------------------------------------
 \step{Step 8 --- Bath enthalpy and the bath energy equation}
 
-\sub{8.1 Specific enthalpies} (reference: liquid water and solid NaCl at $0\,^\circ$C; dilution enthalpy neglected):
+\textbf{The question.} How much heat does the bath hold, and how does it change?
+
+\sub{8.1 Specific enthalpies.} Each is counted from the reference (liquid water and solid salt at $0\dC$),
+in J\,kg$^{-1}$, with $T$ in $^\circ$C:
 \[
-h_{\mathrm{ice}} = c_iT - L_f,\qquad h_{\mathrm{salt}} = c_hT,\qquad h_{\mathrm{brine}} = c_bT + w\,\Delta h_s .
+h_{\mathrm{ice}} = 2000\,T - 333\,550,\qquad h_{\mathrm{salt}} = 864\,T,\qquad
+h_{\mathrm{brine}} = (4180 - 4400\,w)\,T + 66\,400\,w .
 \]
+Ice at $0\dC$ holds less heat than water at $0\dC$ by the latent heat $L_f$, and cooling it removes
+$c_i = 2000$ per kelvin. Salt starts at the reference and has only its sensible heat, $c_h = 864$ per
+kelvin. Brine is made from water and salt at the reference: dissolving its $w$\,kg of salt absorbs
+$\Delta h_s = 66\,400$ per kg of salt, and it then warms with its own specific heat $c_b(w)$. The heat of
+diluting brine further is left out.
 
-\sub{8.2 Total enthalpy.}
-\[ \Hb = m_i(c_iT_b - L_f) + m_l(c_bT_b + w\Delta h_s) + m_h c_hT_b\ \ [+\,C_tT_b \text{ if the tank is included}]. \]
+The straight line $c_b(w) = (1-w)\,c_w + w\,(c_w - 4400)$ can be read as water at $c_w = 4180$ plus
+dissolved salt at $c_w - 4400 = -220$\,J\,kg$^{-1}$K$^{-1}$. The negative number is not a heat capacity of
+salt: it is how much dissolved ions lower the heat capacity of the water round them. It has one useful
+consequence: at fixed salt, $m_lc_b(w) = 4180\,m_l - 4400\,m_S$, so each kilogram of water added to the
+brine adds exactly $c_w$ to its heat capacity.
 
-\sub{8.3--8.4 First law and box leak.}
-\[ \frac{\dd\Hb}{\dd t} = \Qdb + \dot Q_{\mathrm{leak}} + \Pst, \qquad \dot Q_{\mathrm{leak}} = \UAbox(\Tenv - T_b). \]
+\sub{8.2 Total enthalpy.} Enthalpy is extensive: the bath's is the sum of mass times specific enthalpy over
+its parts, all at the one temperature $T_b$ (A3):
+\begin{multline*}
+\Hb = m_i(2000\,T_b - 333\,550) + m_l\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big]\\
++ 864\,m_hT_b\ \ [+\,C_tT_b].
+\end{multline*}
+The last term is there if the tank glass is counted with the bath (A2).
 
-\sub{8.5 Energy check.} Adding Result 1, $\Qdb$ cancels: with the box sealed and no stirrer, $C_dT_d + \Hb$ is constant.
+\sub{8.3 First law for the bath.} The bath is at constant pressure and does no work: as in Step~1, its
+enthalpy rises by the heat that enters it, from the drink and from the room. There is no stirrer, so no
+other energy enters.
+\[ \frac{\dd\Hb}{\dd t} = \Qdb + \dot Q_{\mathrm{leak}}. \]
+
+\sub{8.4 The leak through the box.} The box is a resistance between the room and the bath (A4), with
+conductance $\UAbox$ (Step~12):
+\[ \dot Q_{\mathrm{leak}} = \UAbox(\Tenv - T_b). \]
+
+\sub{8.5 Energy check.} Adding Result~1, $C_d\,\dd T_d/\dd t = -\Qdb$, the drink's term cancels:
+$\dd(C_dT_d + \Hb)/\dd t = \dot Q_{\mathrm{leak}}$. If the box were perfect ($\UAbox = 0$), $C_dT_d + \Hb$ would
+stay constant --- what the drink loses, the bath gains. Any computation must pass this check.
 
 \begin{result}{Result 8 --- bath energy equation}
-\[ \frac{\dd\Hb}{\dd t} = UA(T_d - T_b) + \UAbox(\Tenv - T_b) + \Pst \]
-\[ \Hb = m_i(c_iT_b - L_f) + m_l(c_bT_b + w\Delta h_s) + m_hc_hT_b \]
+\[ \frac{\dd\Hb}{\dd t} = UA(T_d - T_b) + \UAbox(\Tenv - T_b) \]
+\begin{gather*}
+\Hb = m_i(2000\,T_b - 333\,550) + m_l\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big] + 864\,m_hT_b
+\end{gather*}
 \end{result}
+\means The bath's state variable is the heat it holds, not its temperature. Heat in raises $\Hb$; what
+that does to $T_b$ depends on whether it warms the bath or melts ice, which Step~9 decides.
 
 % ---------------------------------------------------------------
 \step{Step 9 --- Inverting $\Hb$: the regime map}
 
-Given $\Hb$, $m_W$, $m_S$, the bath state is unique: five unknowns, two mass balances, one enthalpy,
-and two constraints from whichever phases are present.
-\[ (T_b,\,m_i,\,m_l,\,m_h,\,w) = \mathcal S(\Hb;\,m_W,\,m_S) \]
+\textbf{The question.} Given the bath's enthalpy and what was put in, what is its temperature, and how
+much ice, brine and salt does it hold?
 
-\sub{R-I --- liquid only} ($m_i=m_h=0$, $m_l = m_W+m_S$, $w=\bar w$):
-\[ T_b = \frac{\Hb - m_S\Delta h_s}{(m_W+m_S)c_b}. \]
+There are five unknowns, $T_b$, $m_i$, $m_l$, $m_h$ and $w$. The two mass balances (Step~7) and the
+enthalpy (Step~8) give three equations; the phase rule (Step~6) supplies the other two from whichever
+phases are present (a missing phase supplies its own zero mass). So the state is fixed:
+\[ (T_b,\,m_i,\,m_l,\,m_h,\,w) = \mathcal S(\Hb;\,m_W,\,m_S). \]
+Which phases are present depends on $\Hb$; the five possibilities are the regimes below, from warm to cold.
 
-\sub{R-II --- ice + brine on the liquidus} ($m_h=0$; exists only if $\bar w<w_E$):
+\sub{R-I --- liquid only.} No ice, no crystals: $m_i=m_h=0$, $m_l = m_W+m_S$, $w=\bar w$. The enthalpy
+is that of the brine alone, which is linear in $T_b$:
+\[ T_b = \frac{\Hb - 66\,400\,m_S}{(m_W+m_S)(4180 - 4400\,\bar w)}. \]
+
+\sub{R-II --- ice and brine on the freezing curve.} No crystals ($m_h=0$); this regime exists only if
+$\bar w<w_E$. The brine sits on the freezing curve, $T_b = \Tliq(w)$, and Step~7 gives $m_l = m_S/w$ and
+$m_i = m_W + m_S - m_S/w$. Putting these into $\Hb$ makes it a function of $w$ alone:
+\begin{multline*}
+\Hb_{\mathrm{II}}(w) = \Big(m_W+m_S-\frac{m_S}{w}\Big)\big(2000\,\Tliq(w) - 333\,550\big)\\
++ \frac{m_S}{w}(4180 - 4400\,w)\,\Tliq(w) + 66\,400\,m_S .
+\end{multline*}
+It is solved for $w$ between $\bar w$ and $w_E$. There is exactly one root: adding heat melts ice
+($\dd\Hb/\dd m_m = \Leff > 0$, Step~10), and melting dilutes the brine ($\dd w/\dd m_m < 0$), so $\Hb_{\mathrm{II}}$
+falls steadily as $w$ rises. Then $T_b = \Tliq(w)$.
+
+\sub{R-III --- the eutectic plateau.} Ice, brine and crystals together: $T_b = -21.2\dC$ and $w = 0.2318$
+(Step~6). Only the brine mass is free, and $\Hb$ is linear in it. With no brine at all, everything is ice
+and salt at $T_E$:
 \[
-\Hb = \Big(m_W+m_S-\frac{m_S}{w}\Big)\big(c_i\Tliq(w) - L_f\big) + \frac{m_S}{w}c_b\Tliq(w) + m_S\Delta h_s \equiv \Hb_{\mathrm{II}}(w),
+\Hb_{E0} = m_W(c_iT_E - L_f) + m_Sc_hT_E = -375\,950\,m_W - 18\,317\,m_S .
 \]
-solved for $w\in[\bar w, w_E]$; the root is unique since $\dd\Hb/\dd m_m = \Leff>0$ while $\dd w/\dd m_m<0$. Then $T_b=\Tliq(w)$.
-
-\sub{R-III --- eutectic plateau} ($T_b = T_E$, $w = w_E$):
+Each kilogram of eutectic brine is made from $1-w_E$\,kg of ice and $w_E$\,kg of salt at $T_E$; the
+enthalpy this takes is the brine's minus theirs, $\Lambda_E = h_{\mathrm{brine}} - (1-w_E)h_{\mathrm{ice}} - w_Eh_{\mathrm{salt}}$:
 \[
-\Hb = \Hb_{E0} + \Lambda_E m_l,\qquad \Hb_{E0} = m_W(c_iT_E - L_f) + m_Sc_hT_E,
+\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b(w_E) - (1-w_E)c_i - w_Ec_h\big] .
 \]
+The first term melts 0.768\,kg of ice, 256\,230\,J; the second dissolves 0.232\,kg of salt, 15\,390\,J; the
+third, $-21.2\times(3160 - 1536 - 200) = -30\,180$\,J, is negative because the brine has a larger heat
+capacity than the ice and salt it came from, and at $T_E$, below the reference, a larger heat capacity
+means less enthalpy. In all, $\Lambda_E = 241\,450$\,J\,kg$^{-1}$, and
 \[
-\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b - (1-w_E)c_i - w_Ec_h\big],
+m_l = \frac{\Hb - \Hb_{E0}}{241\,450},\qquad m_i = m_W - 0.7682\,m_l,\qquad m_h = m_S - 0.2318\,m_l .
 \]
-\[
-m_l = \frac{\Hb - \Hb_{E0}}{\Lambda_E},\qquad m_i = m_W - (1-w_E)m_l,\qquad m_h = m_S - w_Em_l .
-\]
-Salt runs out first (into R-II) if $\bar w<w_E$; ice runs out first (into R-IV) if $\bar w>w_E$.
+Heat moves the bath along the plateau by making or freezing eutectic brine. If $\bar w<w_E$ the salt runs
+out first, and the bath leaves into R-II; if $\bar w>w_E$ the ice runs out first, and it leaves into R-IV.
 
-\sub{R-IV --- saturated brine + solid salt, no ice} (only if $\bar w>w_E$):
-\[
-\Hb = \frac{m_W}{1-\wsat}\big(c_bT_b + \wsat\Delta h_s\big) + \Big(m_S - \frac{\wsat m_W}{1-\wsat}\Big)c_hT_b \equiv \Hb_{\mathrm{IV}}(T_b),
-\]
-solved for $T_b\in[T_E, T_\star]$, where $\wsat(T_\star)=\bar w$.
+\sub{R-IV --- saturated brine and crystals, no ice.} Only if $\bar w>w_E$. All the water is liquid,
+$m_l = m_W/(1-w)$, and the brine is saturated, $w = \wsat(T_b) = 0.2318 + 1.458\times10^{-3}(T_b + 21.2)$; the
+rest of the salt is crystals, $m_h = m_S - w\,m_l$. Then $\Hb$ is a function of $T_b$ alone:
+\begin{multline*}
+\Hb_{\mathrm{IV}}(T_b) = \frac{m_W}{1-w}\big[(4180 - 4400\,w)\,T_b + 66\,400\,w\big]\\
++ \Big(m_S - \frac{w\,m_W}{1-w}\Big)864\,T_b,
+\end{multline*}
+solved for $T_b$ between $T_E$ and $T_\star$, the temperature at which all the salt would just dissolve,
+$\wsat(T_\star)=\bar w$, that is $T_\star = -21.2 + (\bar w - 0.2318)/(1.458\times10^{-3})$.
 
-\sub{R-V --- fully solid} ($m_l=0$):
-\[ T_b = \frac{\Hb + m_WL_f}{m_Wc_i + m_Sc_h}. \]
+\sub{R-V --- fully solid.} No brine ($m_l=0$): all the water is ice and all the salt crystals, below $T_E$.
+The enthalpy is linear in $T_b$:
+\[ T_b = \frac{\Hb + 333\,550\,m_W}{2000\,m_W + 864\,m_S}. \]
 
-\textbf{Regime boundaries.} The state is continuous across every boundary.
+\textbf{Regime boundaries.} Each threshold is the enthalpy at which a phase appears or disappears, found by
+putting that state into the formula of either neighbouring regime; the state is continuous across every
+boundary.
 
 {\small
 \begin{tabularx}{\linewidth}{l l l X}
 \toprule
 Bath type & Regime & Range & Threshold \\
 \midrule
-$\bar w<w_E$ & R-I & $\Hb\ge\Hb_A$ & $\Hb_A = (m_W+m_S)c_b\Tliq(\bar w) + m_S\Delta h_s$ \\
- & R-II & $\Hb_B\le\Hb<\Hb_A$ & $\Hb_B = \Hb_{E0} + \Lambda_E m_S/w_E$ \\
+$\bar w<w_E$ & R-I & $\Hb\ge\Hb_A$ & $\Hb_A = (m_W+m_S)(4180 - 4400\,\bar w)\Tliq(\bar w) + 66\,400\,m_S$: first ice \\
+ & R-II & $\Hb_B\le\Hb<\Hb_A$ & $\Hb_B = \Hb_{E0} + 1\,041\,600\,m_S$: all salt in eutectic brine \\
  & R-III & $\Hb_{E0}\le\Hb<\Hb_B$ & \\
  & R-V & $\Hb<\Hb_{E0}$ & \\
 \midrule
-$\bar w>w_E$ & R-I & $\Hb\ge\Hb_C$ & $\Hb_C = (m_W+m_S)c_bT_\star + m_S\Delta h_s$ \\
- & R-IV & $\Hb_D\le\Hb<\Hb_C$ & $\Hb_D = \Hb_{E0} + \Lambda_E m_W/(1-w_E)$ \\
+$\bar w>w_E$ & R-I & $\Hb\ge\Hb_C$ & $\Hb_C = (m_W+m_S)(4180 - 4400\,\bar w)T_\star + 66\,400\,m_S$: first crystal \\
+ & R-IV & $\Hb_D\le\Hb<\Hb_C$ & $\Hb_D = \Hb_{E0} + 314\,300\,m_W$: all water in eutectic brine \\
  & R-III & $\Hb_{E0}\le\Hb<\Hb_D$ & \\
  & R-V & $\Hb<\Hb_{E0}$ & \\
 \bottomrule
 \end{tabularx}}
 
+The numbers are $\Lambda_E/w_E = 1\,041\,600$ and $\Lambda_E/(1-w_E) = 314\,300$\,J\,kg$^{-1}$: the enthalpy
+of the brine that holds all the salt, or all the water, at the eutectic.
+
 \begin{result}{Result 9 --- bath closure}
 \[ T_b = T_b(\Hb),\quad m_i = m_i(\Hb),\quad m_h = m_h(\Hb),\quad w = w(\Hb) \quad\text{via R-I to R-V} \]
 \end{result}
+\means The enthalpy alone, with the two masses, tells everything about the bath. This is why the model
+steps $\Hb$ forward in time rather than $T_b$: $\Hb$ always changes smoothly, while $T_b$ stops dead on the
+plateau.
 
 % ---------------------------------------------------------------
 \step{Step 10 --- Effective latent heat, bath drift and the blank run}
 
-\sub{10.1 Differentiate along the liquidus} (R-II, $m_l = m_W+m_S-m_i$):
-\[ \dd\Hb = \big[h_{\mathrm{ice}}(T_b) - c_bT_b\big]\dd m_i + \underbrace{(m_ic_i + m_lc_b)}_{C_B}\dd T_b . \]
+\textbf{The question.} On the freezing curve, how much heat melts a kilogram of ice, and how fast does the
+bath warm?
 
-\sub{10.2 Per kilogram melted.}
-\[ \Leff \equiv \frac{\dd\Hb}{\dd m_m} = L_f + (c_b - c_i)T_b + C_B\frac{\dd T_b}{\dd m_m}. \]
-
-\sub{10.3 Drift per kilogram melted.}
+\sub{10.1 Differentiate along the freezing curve.} In R-II all the salt is dissolved, so
+$m_lw = m_S$ is fixed, and by 8.1 $m_l(4180 - 4400w) = 4180\,m_l - 4400\,m_S$. The enthalpy is
+$\Hb = m_i(c_iT_b - L_f) + (4180\,m_l - 4400\,m_S)T_b + 66\,400\,m_S$, with $m_l = m_W+m_S-m_i$. A small change
+of ice and temperature changes it by
 \[
-\frac{\dd T_b}{\dd m_m} = -\frac{w}{m_l}\frac{\dd\Tliq}{\dd w} = \frac{100\,w}{m_l\,(b_1 + 2b_2\vartheta + 3b_3\vartheta^2)} > 0 .
+\dd\Hb = \big[h_{\mathrm{ice}}(T_b) - c_wT_b\big]\dd m_i
++ \underbrace{\big(m_ic_i + m_lc_b(w)\big)}_{C_B}\dd T_b .
 \]
+The first term: a kilogram of ice that melts becomes a kilogram of water in the brine, at heat content
+$c_wT_b$ in place of $h_{\mathrm{ice}}(T_b)$. The second warms the ice and brine already there; $C_B$ is
+their heat capacity.
 
-\sub{10.4--10.5 Effective heat capacity, every regime.}
+\sub{10.2 Heat per kilogram melted.} With $\dd m_m = -\dd m_i$ and $h_{\mathrm{ice}} = c_iT_b - L_f$:
+\begin{gather*}
+\Leff \equiv \frac{\dd\Hb}{\dd m_m} = L_f + (c_w - c_i)T_b + C_B\frac{\dd T_b}{\dd m_m},
+\\
+\Leff = 333\,550 + 2180\,T_b + C_B\frac{\dd T_b}{\dd m_m} .
+\end{gather*}
+Three parts: the latent heat at $0\dC$; a correction because the ice melts at $T_b$, not $0\dC$ (below
+zero the latent heat is smaller by $c_w - c_i = 2180$\,J\,kg$^{-1}$ per kelvin, Kirchhoff's law, so this
+term is negative); and the heat that warms
+the whole bath, because melting dilutes the brine and so raises its freezing point. The last part makes
+$\Leff$ larger than $L_f$: for the 20 Oct rig-note charge at $-17.8\dC$, $\Leff = 411\,500$\,J\,kg$^{-1}$,
+23\,\% more.
+
+\sub{10.3 Warming per kilogram melted.} By the chain rule, with $\dd w/\dd m_m = -w/m_l$ (Step~7) and the
+slope of the freezing curve (6.4),
 \[
-\Ceff \equiv \frac{\dd\Hb}{\dd T_b} =
+\frac{\dd T_b}{\dd m_m} = \frac{\dd\Tliq}{\dd w}\,\frac{\dd w}{\dd m_m}
+= \frac{100\,w}{m_l\,(1.78 - 0.0884\,\vartheta + 1.672\times10^{-3}\,\vartheta^2)} > 0 .
+\]
+Melting always warms a bath on the freezing curve, and more so the less brine there is.
+
+\sub{10.4 Effective heat capacity in every regime.} The heat that raises the bath's temperature by one
+kelvin, $\Ceff = \dd\Hb/\dd T_b$, follows from differentiating each regime's enthalpy:
+\[
+\Ceff =
 \begin{cases}
-(m_W+m_S)c_b & \text{R-I}\\[4pt]
-C_B + \dfrac{L_f + (c_b-c_i)T_b}{\dd T_b/\dd m_m} & \text{R-II}\\[10pt]
+(m_W+m_S)(4180 - 4400\,\bar w) & \text{R-I}\\[4pt]
+C_B + \dfrac{333\,550 + 2180\,T_b}{\dd T_b/\dd m_m} & \text{R-II}\\[10pt]
 \infty & \text{R-III}\\[4pt]
-m_lc_b + m_hc_h + \dfrac{m_W\,\wsat'(T_b)}{(1-\wsat)^2}\big[(c_b-c_h)T_b + \Delta h_s\big] & \text{R-IV}\\[10pt]
-m_Wc_i + m_Sc_h & \text{R-V}
+m_lc_b(w) + 864\,m_h + \dfrac{1.458\times10^{-3}\,m_W}{(1-w)^2}\,(66\,400 - 1084\,T_b) & \text{R-IV}\\[10pt]
+2000\,m_W + 864\,m_S & \text{R-V}
 \end{cases}
 \]
+R-I and R-V are plain heat capacities. In R-II, warming by one kelvin needs $1/(\dd T_b/\dd m_m)$\,kg of
+ice melted, each costing $L_f + (c_w - c_i)T_b$, on top of $C_B$: this is usually much larger than $C_B$.
+On the plateau no amount of heat changes the temperature. In R-IV, warming dissolves more salt,
+$\dd(w\,m_l)/\dd T_b = m_W\wsat'/(1-w)^2$ with $\wsat' = 1.458\times10^{-3}$\,K$^{-1}$, each kilogram
+absorbing $\Delta h_s$ and changing the sensible heat by $(-220 - 864)T_b = -1084\,T_b$ (dissolved instead
+of solid salt, 8.1).
 
-\sub{10.6 The plateau as a thermostat} ($\dot Q_{\mathrm{in}} = \Qdb + \dot Q_{\mathrm{leak}} + \Pst$):
+\sub{10.5 The plateau as a thermostat.} On the plateau the heat coming in, $\dot Q_{\mathrm{in}} = \Qdb +
+\dot Q_{\mathrm{leak}}$, does not warm the bath; it makes eutectic brine at $\Lambda_E$ per kilogram, using ice
+and salt in the ratio $1-w_E$ to $w_E$:
 \[
-\frac{\dd m_l}{\dd t} = \frac{\dot Q_{\mathrm{in}}}{\Lambda_E},\quad
-\frac{\dd m_i}{\dd t} = -(1-w_E)\frac{\dot Q_{\mathrm{in}}}{\Lambda_E},\quad
-\frac{\dd m_h}{\dd t} = -w_E\frac{\dot Q_{\mathrm{in}}}{\Lambda_E},\quad
-t_{\mathrm{buffer}} = \frac{m_h(0)\Lambda_E}{w_E\overline{\dot Q}_{\mathrm{in}}}.
+\frac{\dd m_l}{\dd t} = \frac{\dot Q_{\mathrm{in}}}{241\,450},\qquad
+\frac{\dd m_i}{\dd t} = -\frac{\dot Q_{\mathrm{in}}}{314\,300},\qquad
+\frac{\dd m_h}{\dd t} = -\frac{\dot Q_{\mathrm{in}}}{1\,041\,600}\ \ (\text{kg\,s}^{-1}).
 \]
+The undissolved salt $m_h(0)$ is the buffer: it lasts
+\[ t_{\mathrm{buffer}} = \frac{m_h(0)\,\Lambda_E}{w_E\,\overline{\dot Q}_{\mathrm{in}}} = \frac{1.042\times10^{6}\,m_h(0)}{\overline{\dot Q}_{\mathrm{in}}}\ \ \text{s}, \]
+with $m_h(0)$ in kg and the mean heat flow in W. Each 100\,g of spare salt holds the bath at $-21.2\dC$
+against 1\,W for 29 hours.
 
-\sub{10.7 Blank-run inversion} (no drink, R-II):
+\sub{10.6 The blank run.} With no drink in the bath and no stirrer, only the leak brings heat in. On the
+freezing curve, $\dot Q_{\mathrm{leak}} = \Leff\,\dd m_m/\dd t$, and since $\dd m_m/\dd t = \dot T_b/(\dd T_b/\dd m_m)$,
 \[
-\dot Q_{\mathrm{leak}} + \Pst = \Leff\frac{\dd T_b/\dd t}{\dd T_b/\dd m_m} = \Ceff\frac{\dd T_b}{\dd t}
+\dot Q_{\mathrm{leak}} = \Leff\frac{\dd T_b/\dd t}{\dd T_b/\dd m_m} = \Ceff\frac{\dd T_b}{\dd t}
 \;\Rightarrow\;
-\UAbox = \frac{\Ceff\dot T_b - \Pst}{\Tenv - T_b}.
+\UAbox = \frac{\Ceff\,\dot T_b}{\Tenv - T_b}.
 \]
-Using $L_f$ in place of $\Leff$ underestimates the leak.
+A logged warming rate $\dot T_b$ therefore measures the box. Using $L_f$ in place of $\Leff$ would miss the
+heat that warms the whole bath and underestimate the leak.
 
 \begin{result}{Result 10 --- explicit bath temperature equation}
-\[ \Ceff(T_b)\frac{\dd T_b}{\dd t} = UA(T_d - T_b) + \UAbox(\Tenv - T_b) + \Pst \qquad(\dot T_b = 0 \text{ in R-III}) \]
+\[ \Ceff(T_b)\frac{\dd T_b}{\dd t} = UA(T_d - T_b) + \UAbox(\Tenv - T_b) \qquad(\dot T_b = 0 \text{ in R-III}) \]
 \end{result}
+\means The bath behaves like a body of heat capacity $\Ceff$, but one that changes with the regime: huge on
+the freezing curve, infinite on the plateau. That is why a bath with ice in it warms so slowly.
 
 % ---------------------------------------------------------------
 \step{Step 11 --- Initial state from premixing}
 
-\sub{11.1 Enthalpy of the ingredients.}
-\[ \Hb_0 = m_{i0}(c_iT_{i0} - L_f) + m_{w0}c_wT_{w0} + m_Sc_hT_{s0}, \qquad m_W = m_{i0}+m_{w0}. \]
+\textbf{The question.} What state does the bath start in, once the ice, water and salt are mixed?
 
-\sub{11.2 Adiabatic mixing.} $(T_{b0}, m_i, m_l, m_h, w)(0) = \mathcal S(\Hb_0; m_W, m_S)$. $\Hb_0$ is path-independent:
-one-shot, staged and pre-dissolved addition reach the same equilibrium, only at different rates.
+\sub{11.1 Enthalpy of the ingredients.} Before mixing, each ingredient is at its own temperature: ice at
+$T_{i0}$, water at $T_{w0}$, salt at $T_{s0}$. Using 8.1 for each,
+\[ \Hb_0 = m_{i0}(2000\,T_{i0} - 333\,550) + 4180\,m_{w0}T_{w0} + 864\,m_ST_{s0}, \]
+and all the water is $m_W = m_{i0}+m_{w0}$.
 
-\sub{11.3 Start on the eutectic} iff
-$\ \Hb_{E0}\le\Hb_0<\Hb_B\ (\bar w<w_E)\ $ or $\ \Hb_{E0}\le\Hb_0<\Hb_D\ (\bar w>w_E)$.
+\sub{11.2 Adiabatic mixing.} In the insulated box, mixing exchanges heat only among the ingredients, so
+the enthalpy does not change (Step~8 with no heat in). The starting state is the one Step~9 gives for
+$\Hb_0$: $(T_{b0}, m_i, m_l, m_h, w)(0) = \mathcal S(\Hb_0; m_W, m_S)$. Enthalpy is a state function, so
+this does not depend on the order of mixing: adding the salt at once, in stages, or pre-dissolved reaches
+the same equilibrium, only at different rates.
 
-\sub{11.4 Keep a salt buffer} $m_h(0)\ge m_{\mathrm{buf}}$:
-\[ \Hb_0 \le \Hb_{E0} + \frac{\Lambda_E(m_S - m_{\mathrm{buf}})}{w_E}. \]
+\sub{11.3 Start on the eutectic.} The bath starts on the plateau if $\Hb_0$ falls in its range (Step~9):
+\begin{gather*}
+\Hb_{E0}\le\Hb_0<\Hb_{E0} + 1\,041\,600\,m_S\quad\text{if } \bar w<w_E,
+\\
+\Hb_{E0}\le\Hb_0<\Hb_{E0} + 314\,300\,m_W\quad\text{if } \bar w>w_E.
+\end{gather*}
 
-\sub{11.5 Minimum ice fraction} $f = m_{i0}/m_W$, for any upper bound $\Hb_{\max}$:
-\[ f \ge f_{\mathrm{crit}} = \frac{m_Wc_wT_{w0} + m_Sc_hT_{s0} - \Hb_{\max}}{m_W\,(c_wT_{w0} - c_iT_{i0} + L_f)}. \]
+\sub{11.4 Keep a salt buffer.} To start with at least $m_{\mathrm{buf}}$ of salt undissolved, the plateau
+formula $m_h = m_S - 0.2318\,m_l$ with $m_l = (\Hb_0 - \Hb_{E0})/241\,450$ must give $m_h \ge m_{\mathrm{buf}}$:
+\[ \Hb_0 \le \Hb_{E0} + 1\,041\,600\,(m_S - m_{\mathrm{buf}}). \]
 
-\sub{11.6 Latent share of the initial cooling.}
-\[ \chi_{\mathrm{lat}} = \frac{\Delta m\,L_f}{\Delta m\,L_f + m_{S,\mathrm{dis}}\Delta h_s}. \]
+\sub{11.5 Minimum ice fraction.} Write the ice as a fraction $f = m_{i0}/m_W$ of the water. Then
+$\Hb_0 = m_W[f(2000\,T_{i0} - 333\,550) + (1-f)\,4180\,T_{w0}] + 864\,m_ST_{s0}$, which falls as $f$ rises.
+For $\Hb_0$ to stay below any bound $\Hb_{\max}$ (from 11.3 or 11.4),
+\[ f \ge f_{\mathrm{crit}} = \frac{4180\,m_WT_{w0} + 864\,m_ST_{s0} - \Hb_{\max}}{m_W\,(4180\,T_{w0} - 2000\,T_{i0} + 333\,550)}. \]
+
+\sub{11.6 Melting against dissolving.} When the mixture cools itself, the heat comes from melting
+$\Delta m$ of ice and dissolving $m_{S,\mathrm{dis}}$ of salt. The share due to melting is
+\[ \chi_{\mathrm{lat}} = \frac{333\,550\,\Delta m}{333\,550\,\Delta m + 66\,400\,m_{S,\mathrm{dis}}}. \]
+Per kilogram, melting ice absorbs five times as much heat as dissolving salt.
 
 \begin{result}{Result 11 --- initial conditions}
-\[ T_d(0) = T_{d0}, \qquad \Hb(0) = \Hb_0 = m_{i0}(c_iT_{i0} - L_f) + m_{w0}c_wT_{w0} + m_Sc_hT_{s0} \]
+\begin{gather*}
+T_d(0) = T_{d0},\\
+\Hb(0) = m_{i0}(2000\,T_{i0} - 333\,550) + 4180\,m_{w0}T_{w0} + 864\,m_ST_{s0}
+\end{gather*}
 \end{result}
+\means How cold the bath starts, and whether it starts on the plateau with salt to spare, is set by a
+single number, the enthalpy of what goes in; a drier, colder charge has less of it.
 
 % ---------------------------------------------------------------
-\step{Step 12 --- Parasitic terms: box leak and stirrer}
+\step{Step 12 --- The box leak}
 
+\textbf{The question.} How fast does heat from the room get into the bath?
+
+Heat from the room crosses three layers in series: the film of room air on the outside of the box, the
+foam, and the air between the foam and the tank. As in Step~2 their resistances add:
 \[
-\frac{1}{\UAbox} = \frac{1}{h_{\mathrm{air}}A_{\mathrm{out}}} + \frac{\delta_{\mathrm{box}}}{k_{\mathrm{box}}A_{\mathrm{box}}} + \frac{1}{h_{\mathrm{in}}A_{\mathrm{in}}}
-\approx \frac{\delta_{\mathrm{box}}}{k_{\mathrm{box}}A_{\mathrm{box}}},
-\qquad \Pst = \Gamma\omega .
+\frac{1}{\UAbox} = \frac{1}{h_{\mathrm{air}}A_{\mathrm{out}}} + \frac{\delta_{\mathrm{box}}}{0.035\,A_{\mathrm{box}}}
++ \frac{1}{h_{\mathrm{in}}A_{\mathrm{in}}}
+\approx \frac{\delta_{\mathrm{box}}}{0.035\,A_{\mathrm{box}}},
 \]
-If the lid is off (violates A5): $\dot Q_{\mathrm{surf}} = h_sA_s(T_{\mathrm{air}} - T_b) + \dot m_v h_{sg}$.
-If the drink is not fully immersed (violates A8):
-$\ C_d\dot T_d = -UA(T_d - T_b) + UA_{da}(T_{\mathrm{air}} - T_d)$.
+with expanded polystyrene's conductivity, 0.035\,W\,m$^{-1}$K$^{-1}$. The foam dominates: 30\,mm of it has
+$\delta/k = 0.86$\,m$^2$K\,W$^{-1}$, against about $1/9 = 0.11$ for room air (free convection plus radiation)
+and $1/6 = 0.17$ for the air gap inside. Dropping the films overestimates the leak by about a third;
+gaps round the lid, where heat bypasses the foam, push it the other way.
 
-\begin{result}{Result 12 --- parasitic inputs}
-\[ \dot Q_{\mathrm{leak}} = \UAbox(\Tenv - T_b),\qquad \UAbox\approx\frac{k_{\mathrm{box}}A_{\mathrm{box}}}{\delta_{\mathrm{box}}},\qquad \Pst = \Gamma\omega \]
+Two variants for when an assumption is broken. With the lid off (A5), the bath's open surface also takes
+heat from the air and from water condensing on it: $\dot Q_{\mathrm{surf}} = h_sA_s(T_{\mathrm{air}} - T_b)
++ \dot m_vh_{sg}$, with $\dot m_v$ the condensation rate and $h_{sg}$ its latent heat. With the drink not
+fully immersed (A8), its exposed part takes heat from the air:
+$C_d\dot T_d = -UA(T_d - T_b) + UA_{da}(T_{\mathrm{air}} - T_d)$.
+
+\begin{result}{Result 12 --- the leak}
+\[ \dot Q_{\mathrm{leak}} = \UAbox(\Tenv - T_b),\qquad \UAbox\approx\frac{0.035\,A_{\mathrm{box}}}{\delta_{\mathrm{box}}} \]
 \end{result}
+\means The leak is proportional to how much colder the bath is than the room, so it is largest exactly
+when the bath is most useful. It is best measured, with the blank run of 10.6.
 
 % ---------------------------------------------------------------
 \step{Step 13 --- The closed model}
 
-Two first-order ODEs in the state $(T_d, \Hb)$, closed by one heat-flow law and one algebraic map
-from $\Hb$ to the bath state.
+\textbf{The question.} What is the complete set of equations to integrate?
 
-\sub{13.1 Governing equations.}
+Two first-order differential equations for the state $(T_d, \Hb)$, closed by one law for the heat flow and
+one map from $\Hb$ to the bath's state.
+
+\sub{13.1 Governing equations} (Results 1 and 8):
 \[
 C_d\frac{\dd T_d}{\dd t} = -\Qdb, \qquad
-\frac{\dd\Hb}{\dd t} = \Qdb + \UAbox(\Tenv - T_b) + \Pst .
+\frac{\dd\Hb}{\dd t} = \Qdb + \UAbox(\Tenv - T_b) .
 \]
 
-\sub{13.2 Heat-flow closure --- choose one.}
-\[
-\begin{aligned}
-&\text{A (constant conductance):} && \Qdb = UA(T_d - T_b), \quad \tfrac{1}{UA} = R_i+R_c+R_w+R_o\\
-&\text{B (drink-film convection):} && \Qdb = K_iA_i\big[(T_d - T_b) - \Qdb(R_c+R_w+R_o)\big]^{5/4},\quad K_i = C_ik_d\Big(\tfrac{g\beta}{\nu\alpha H}\Big)^{1/4}
-\end{aligned}
-\]
+\sub{13.2 Heat-flow closure --- choose one} (Results 2 and 5):
+\begin{gather*}
+\text{A (constant conductance):}\quad \Qdb = UA(T_d - T_b), \quad \frac{1}{UA} = R_i+R_c+R_w+R_o\\
+\text{B (drink-film convection):}\quad \Qdb = 112\,H^{-1/4}A_i\big[(T_d - T_b) - \Qdb(R_c+R_w+R_o)\big]^{5/4}
+\end{gather*}
 
-\sub{13.3 Bath closure.} $(T_b, m_i, m_l, m_h, w) = \mathcal S(\Hb; m_W, m_S)$:
+\sub{13.3 Bath closure} (Results 6, 7 and 9), $(T_b, m_i, m_l, m_h, w) = \mathcal S(\Hb; m_W, m_S)$, in J,
+kg and $^\circ$C:
 {\small
 \[
 \mathcal S:\
 \begin{cases}
-\text{R-I:} & m_i=m_h=0,\ w=\bar w,\ T_b = \dfrac{\Hb - m_S\Delta h_s}{(m_W+m_S)c_b}\\[10pt]
-\text{R-II:} & m_h=0,\ \Hb = \Big(m_W+m_S-\dfrac{m_S}{w}\Big)\big(c_i\Tliq(w)-L_f\big) + \dfrac{m_S}{w}c_b\Tliq(w) + m_S\Delta h_s,\ T_b=\Tliq(w)\\[10pt]
-\text{R-III:} & T_b=T_E,\ w=w_E,\ m_l = \dfrac{\Hb-\Hb_{E0}}{\Lambda_E},\ m_i = m_W-(1-w_E)m_l,\ m_h = m_S - w_Em_l\\[10pt]
-\text{R-IV:} & m_i = 0,\ w=\wsat(T_b),\ \Hb = \dfrac{m_W(c_bT_b + w\Delta h_s)}{1-w} + \Big(m_S - \dfrac{wm_W}{1-w}\Big)c_hT_b\\[10pt]
-\text{R-V:} & m_l=0,\ T_b = \dfrac{\Hb + m_WL_f}{m_Wc_i + m_Sc_h}
+\text{R-I:} & m_i=m_h=0,\ w=\bar w,\ T_b = \dfrac{\Hb - 66\,400\,m_S}{(m_W+m_S)(4180 - 4400\,\bar w)}\\[10pt]
+\text{R-II:} & m_h=0,\ m_l = m_S/w,\ T_b=\Tliq(w),\ w \text{ from } \Hb = \Hb_{\mathrm{II}}(w)\ \text{(Step 9)}\\[6pt]
+\text{R-III:} & T_b=-21.2,\ w=0.2318,\ m_l = \dfrac{\Hb-\Hb_{E0}}{241\,450},\ m_i = m_W-0.7682\,m_l,\ m_h = m_S - 0.2318\,m_l\\[10pt]
+\text{R-IV:} & m_i = 0,\ w=\wsat(T_b),\ T_b \text{ from } \Hb = \Hb_{\mathrm{IV}}(T_b)\ \text{(Step 9)}\\[6pt]
+\text{R-V:} & m_l=0,\ T_b = \dfrac{\Hb + 333\,550\,m_W}{2000\,m_W + 864\,m_S}
 \end{cases}
 \]}
-with the regime chosen by the Step 9 threshold table, $W = b_1\vartheta+b_2\vartheta^2+b_3\vartheta^3$
-($W=100w$, $\vartheta=-\Tliq$), and
+with the regime chosen by the thresholds of Step~9, and
 \begin{gather*}
-\Hb_{E0} = m_W(c_iT_E - L_f) + m_Sc_hT_E,\quad
-\Lambda_E = (1-w_E)L_f + w_E\Delta h_s + T_E\big[c_b-(1-w_E)c_i-w_Ec_h\big],
-\\
+W = 1.78\,\vartheta - 0.0442\,\vartheta^2 + 5.572\times10^{-4}\,\vartheta^3\ \ (W=100w,\ \vartheta=-\Tliq),\\
+\wsat(T) = 0.2318 + 1.458\times10^{-3}(T + 21.2),\qquad
+\Hb_{E0} = -375\,950\,m_W - 18\,317\,m_S,\qquad
 \bar w = \frac{m_S}{m_W+m_S}.
 \end{gather*}
 
-\sub{13.4 Equivalent explicit form} (for Desmos / Mathematica; integrate the $\Hb$ form, which carries the plateau without dividing by $\Ceff=\infty$):
+\sub{13.4 Equivalent explicit form.} For a hand calculation (Desmos, Mathematica), Result~10 replaces the
+$\Hb$ equation:
 \[
-C_d\dot T_d = -\Qdb, \qquad \Ceff(T_b)\,\dot T_b = \Qdb + \UAbox(\Tenv - T_b) + \Pst\quad(\dot T_b = 0 \text{ in R-III}).
+C_d\dot T_d = -\Qdb, \qquad \Ceff(T_b)\,\dot T_b = \Qdb + \UAbox(\Tenv - T_b)\quad(\dot T_b = 0 \text{ in R-III}).
 \]
+A program should integrate the $\Hb$ form, which crosses the plateau without dividing by $\Ceff=\infty$.
 
-\sub{13.5 Initial conditions.}
-\[ T_d(0) = T_{d0},\qquad \Hb(0) = m_{i0}(c_iT_{i0}-L_f) + m_{w0}c_wT_{w0} + m_Sc_hT_{s0},\qquad m_W = m_{i0}+m_{w0}. \]
+\sub{13.5 Initial conditions} (Result 11):
+\begin{gather*}
+T_d(0) = T_{d0},\qquad m_W = m_{i0}+m_{w0},\\
+\Hb(0) = m_{i0}(2000\,T_{i0}-333\,550) + 4180\,m_{w0}T_{w0} + 864\,m_ST_{s0}.
+\end{gather*}
 
-\sub{13.6 Stop and validity conditions.}
+\sub{13.6 When to stop, and when the model stops being valid.}
 \begin{itemize}
-  \item $T_d$ reaches the target $T^*$ --- the measured output.
-  \item $T_d$ reaches the drink's freezing point $T_{fd}$ --- beyond this the drink needs its own enthalpy model.
-  \item In a buffered run, $m_h\to0$ --- the thermostat is gone and the bath leaves R-III.
-  \item $T_d$ approaches the density maximum --- closure B and A1 weaken.
+  \item $T_d$ reaches the target $T^*$: the measured output.
+  \item $T_d$ reaches the drink's freezing point $T_{fd}$ (about $-0.9\dC$ for a sugary fizzy drink):
+        beyond it the drink needs its own enthalpy model, like the bath's.
+  \item In a buffered run, $m_h\to0$: the thermostat is gone and the bath leaves the plateau.
+  \item $T_d$ approaches the density maximum near $4\dC$: closure B and assumption A1 weaken (5.8).
 \end{itemize}
 
-\sub{13.7 Parameters and where each comes from.}
+\sub{13.7 What has to be measured.}
 
 {\small
 \begin{tabularx}{\linewidth}{l X X}
 \toprule
-Group & Parameters & How fixed \\
+Group & Parameters & How they are fixed \\
 \midrule
-Drink & $C_d = m_dc_d + m_cc_c$ & weighing + tables \\
-Heat path & $UA$ (A) or $K_iA_i, R_c, R_w, R_o$ (B) & fitted on a buffered run, where $T_b=T_E$ is known \\
-Bath composition & $m_W, m_S, m_{i0}, m_{w0}$ & weighing \\
-Bath properties & $c_i, c_b, c_h, c_w, L_f, \Delta h_s$ & tables \\
-Phase diagram & $b_1,b_2,b_3, T_E, w_E, \wsat(T)$ & Bodnar, literature, own coexistence curve \\
-Environment & $\UAbox, \Pst, \Tenv(t)$ & blank runs, logged channel 4 \\
-Start & $T_{d0}, T_{i0}, T_{w0}, T_{s0}$ & logged \\
+Drink & $m_d$, $c_d$, $m_c$ & weighing; the drink's specific heat from its label (sugar) \\
+Heat path & $UA$ (A), or $A_i$, $H$, $R_c$, $R_w$, $R_o$ (B) & fitted on a buffered run, where $T_b = -21.2\dC$ is known \\
+Bath & $m_W$, $m_S$, $m_{i0}$, $m_{w0}$ & weighing \\
+Environment & $\UAbox$, $\Tenv(t)$ & a blank run (10.6); room temperature logged on channel 4 \\
+Start & $T_{d0}$, $T_{i0}$, $T_{w0}$, $T_{s0}$ & logged \\
 \bottomrule
 \end{tabularx}}
 
-Once $UA$ is fixed on a buffered run, an unbuffered run has no free parameter left; it is a prediction.
+Every other constant is in Table~1. Once $UA$ is fixed on a buffered run, an unbuffered run has no free
+parameter left: it is a prediction.
 
 \begin{tcolorbox}[enhanced,colback=accentB!6,colframe=accentB!80,boxrule=1pt,arc=2pt,
-  fonttitle=\bfseries,coltitle=white,title={Result 13 --- the current model, in one block}]
+  fonttitle=\bfseries,coltitle=white,title={Result 13 --- the model, in one block}]
 \[
 \begin{aligned}
-C_d\,\dot T_d &= -\,UA\,(T_d - T_b)\\
-\dot{\Hb} &= UA\,(T_d - T_b) + \UAbox(\Tenv - T_b) + \Pst\\
+C_d\,\dot T_d &= -\,UA\,(T_d - T_b), \qquad C_d = m_dc_d + 900\,m_c\\
+\dot{\Hb} &= UA\,(T_d - T_b) + \UAbox(\Tenv - T_b)\\
 T_b &= T_b(\Hb;\,m_W,\,m_S)\ \text{ via } \mathcal S\\
 T_d(0) &= T_{d0},\qquad \Hb(0) = \Hb_0
 \end{aligned}
 \]
 \end{tcolorbox}
+\means Five numbers describe the rig ($C_d$, $UA$, $m_W$, $m_S$, $\UAbox$), plus the starting
+temperatures; the rest is physics that is the same in any laboratory.
 
 % ---------------------------------------------------------------
 \step{Step 14 --- Closed-form special cases}
 
-\sub{14.1 Buffered bath} (R-III throughout, $T_b = T_E$): Result 4 with $T_b = T_E$,
-valid while $t < t_{\mathrm{buffer}}$ (10.6):
-\[ T_d(t) = T_E + (T_{d0} - T_E)\,e^{-t/\tau}. \]
+\textbf{The question.} When can the equations be solved with a formula, rather than step by step?
 
-\sub{14.2 Linearised liquidus bath} (R-II, $\Ceff$ constant, $\UAbox = \Pst = 0$): a two-capacitor problem.
-Subtracting the two equations of 13.4,
+\sub{14.1 Buffered bath.} If the bath stays on the plateau (R-III throughout), $T_b = -21.2\dC$ is constant
+and Result~4 applies directly:
+\[ T_d(t) = -21.2 + (T_{d0} + 21.2)\,e^{-t/\tau}, \qquad \tau = \frac{C_d}{UA}, \]
+valid while $t < t_{\mathrm{buffer}}$ (10.5).
+
+\sub{14.2 Bath on the freezing curve, sealed box.} In R-II over a small range of temperature, $\Ceff$ is
+roughly constant; take $\UAbox = 0$. Then drink and bath are two heat capacities joined by one
+conductance. Dividing the two equations of 13.4 by their heat capacities and subtracting,
 \[
 \frac{\dd\theta}{\dd t} = -UA\Big(\frac{1}{C_d}+\frac{1}{\Ceff}\Big)\theta
 \;\Rightarrow\;
 \theta = \theta_0 e^{-t/\tau_c},\qquad \tau_c = \frac{C_d\Ceff}{UA\,(C_d+\Ceff)} = \frac{\tau}{1+\Gamma},\quad \Gamma = \frac{C_d}{\Ceff}.
 \]
-Energy conservation, $C_dT_d + \Ceff T_b = \text{const}$, fixes the shared final temperature:
+The difference closes faster than with a fixed bath, because the bath warms to meet the drink. Energy
+conservation (8.5), $C_dT_d + \Ceff T_b = \text{const}$, fixes the common final temperature, and each
+temperature approaches it with the same time constant:
 \[
 T_\infty = \frac{C_dT_{d0} + \Ceff T_{b0}}{C_d+\Ceff},\qquad
 T_d(t) = T_\infty + (T_{d0}-T_\infty)e^{-t/\tau_c},\qquad
@@ -703,18 +1200,29 @@ T_b(t) = T_\infty - (T_\infty - T_{b0})e^{-t/\tau_c}.
 \]
 The drink reaches $T^*$ only if $T_\infty < T^*$, after $t_{T^*} = \tau_c\ln\big[(T_{d0}-T_\infty)/(T^*-T_\infty)\big]$.
 
-\sub{14.3 With the box leak} ($\Tenv$ constant): a linear system $\dot{\mathbf x} = \mathsf A\mathbf x + \mathbf f$, $\mathbf x = (T_d, T_b)^{\mathsf T}$,
+\sub{14.3 With the box leak.} With $\Tenv$ constant, the two equations of 13.4 are linear in
+$\mathbf x = (T_d, T_b)^{\mathsf T}$: $\dot{\mathbf x} = \mathsf A\mathbf x + \mathbf f$, with
+$\mathbf f = (0,\ \UAbox\Tenv/\Ceff)^{\mathsf T}$ and
 \[
-\mathsf A = \begin{pmatrix} -\dfrac{UA}{C_d} & \dfrac{UA}{C_d}\\[8pt] \dfrac{UA}{\Ceff} & -\dfrac{UA+\UAbox}{\Ceff}\end{pmatrix},
-\qquad
-\lambda_\pm = \tfrac12\Big[\operatorname{tr}\mathsf A \pm \sqrt{(\operatorname{tr}\mathsf A)^2 - 4\det\mathsf A}\Big],
+\mathsf A = \begin{pmatrix} -\dfrac{UA}{C_d} & \dfrac{UA}{C_d}\\[8pt] \dfrac{UA}{\Ceff} & -\dfrac{UA+\UAbox}{\Ceff}\end{pmatrix}.
 \]
-\[
+The solution is a steady state plus two decaying exponentials, $e^{\lambda_\pm t}$, where $\lambda_\pm$ are the
+eigenvalues of $\mathsf A$, the roots of $\lambda^2 - (\operatorname{tr}\mathsf A)\lambda + \det\mathsf A = 0$:
+\begin{gather*}
+\lambda_\pm = \tfrac12\Big[\operatorname{tr}\mathsf A \pm \sqrt{(\operatorname{tr}\mathsf A)^2 - 4\det\mathsf A}\Big],
+\\
 \operatorname{tr}\mathsf A = -\Big(\frac{UA}{C_d} + \frac{UA+\UAbox}{\Ceff}\Big),\qquad
 \det\mathsf A = \frac{UA\cdot\UAbox}{C_d\,\Ceff}.
-\]
-Both eigenvalues are negative; the slow one is set by the leak, the fast one by $UA$.
+\end{gather*}
+The trace is negative and the determinant positive, so both eigenvalues are real and negative. When the
+leak is small, the fast one is nearly $\operatorname{tr}\mathsf A$: the drink and bath coming together as
+in 14.2. The slow one is nearly $\det\mathsf A/\operatorname{tr}\mathsf A$: the room warming both. The steady state is $T_d = T_b = \Tenv$, reached only after the ice is gone --- by which time
+$\Ceff$ has changed, so this solution holds only within one regime.
 
-\sub{14.4 Fixed bath, convection-limited drink:} Result 5, $\theta = \theta_0(1+t/t^*)^{-4}$, $t^* = 4\tau_0$.
+\sub{14.4 Fixed bath, convection-limited drink.} Result~5: $\theta = \theta_0(1+t/t^*)^{-4}$, $t^* = 4\tau_0$.
+
+\means Each special case isolates one physical effect: the thermostat (14.1), the bath warming to meet the
+drink (14.2), and the room warming both (14.3). A full run strings them together as the bath moves from
+regime to regime.
 
 \end{document}
