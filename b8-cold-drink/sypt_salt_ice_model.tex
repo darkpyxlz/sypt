@@ -495,8 +495,7 @@ T_f = -2\times1.86\times\frac{0.005/0.05844}{0.100} = -3.18\dC . \label{eq:s6-ex
 The measured freezing curve (Bodnar 1993) gives $-2.87\dC$ for this brine, 4.76\,wt\,\% salt: the dilute
 law is 11\,\% too cold. In strong brine the error changes sign:
 
-\smallskip
-{\small\centering
+\begin{center}\small
 \begin{tabular}{@{}lcccccc@{}}
 \toprule
 Salt in the brine (wt\,\%) & 5 & 10 & 15 & 16.5 & 20 & 23.2\\
@@ -504,7 +503,8 @@ Salt in the brine (wt\,\%) & 5 & 10 & 15 & 16.5 & 20 & 23.2\\
 Dilute law, $\Delta T_f$ (K) & 3.35 & 7.07 & 11.23 & 12.58 & 15.91 & 19.21\\
 Measured (Bodnar), $\Delta T_f$ (K) & 3.03 & 6.61 & 11.03 & 12.57 & 16.71 & 21.20\\
 \bottomrule
-\end{tabular}\par}
+\end{tabular}
+\end{center}
 \end{worked}
 
 \para{How much salt the brine can hold.} Brine holds at most $\Csat$ of salt; once it is saturated, extra
@@ -1057,10 +1057,13 @@ stops applying when the ice runs out, when the brine saturates (then $\dot m_s =
 
 \para{Alternative single implicit equation.} Eliminating $T$ from the heat balance with \eqref{eq:s11-T},
 without solving for $\dot m_i$:
-\begin{multline}
-H\Big(\Troom + \frac{\alpha m_s}{W}\Big) + G\Big(T_d + \frac{\alpha m_s}{W}\Big)\\
-= -\alpha\Ceff\Big(\frac{\dot m_s}{W} + \frac{m_s\,\dot m_i}{W^2}\Big) - L_f\,\dot m_i + \beta\,\dot m_s . \label{eq:s11-implicit}
-\end{multline}
+\begin{equation}
+\begin{split}
+&H\Big(\Troom + \frac{\alpha m_s}{W}\Big) + G\Big(T_d + \frac{\alpha m_s}{W}\Big)\\
+&\qquad= -\alpha\Ceff\Big(\frac{\dot m_s}{W} + \frac{m_s\,\dot m_i}{W^2}\Big) - L_f\,\dot m_i + \beta\,\dot m_s .
+\end{split}
+\label{eq:s11-implicit}
+\end{equation}
 It is equivalent to \eqref{eq:s11-mi} paired with \eqref{eq:s11-T}.
 
 \begin{worked}{the rig with Can 2, solved}
@@ -1068,8 +1071,7 @@ It is equivalent to \eqref{eq:s11-mi} paired with \eqref{eq:s11-T}.
 $28\dC$; the $4\dC$ water first melts 80\,g of ice so that the bath starts at $0\dC$; grains 0.5\,mm across,
 $A_{s,0} = 5.5$\,m$^2$; $\Csat = 357$\,kg\,m$^{-3}$ held constant; the can goes in at $28\dC$ after 15 minutes.
 
-\smallskip
-{\small\centering
+\begin{center}\small
 \begin{tabular}{@{}lccc@{}}
 \toprule
  & & \multicolumn{2}{c}{time to $5\dC$ (s)}\\
@@ -1085,7 +1087,8 @@ As above, with a beer & 4.64 & 213 & 183\\
 Bath when the can goes in & & $-16.8\dC$ & $-22.4\dC$\\
 Salt dissolved by then & & 0.63\,kg & 0.93\,kg\\
 \bottomrule
-\end{tabular}\par}
+\end{tabular}
+\end{center}
 
 \smallskip
 $k_m$ is in m\,s$^{-1}$. With still brine ($k_m = 10^{-6}$) the salt dissolves slowly and the bath is only at $-16.8\dC$ after 15
@@ -1125,18 +1128,20 @@ $T_f < \Tfd$ part of its water freezes, by \eqref{eq:s10-psi}, giving up latent 
 $T_{w,0}$ and salt at $T_{s,0}$ bring their own sensible heat, measured from $0\dC$, on the starting side; the
 salt that is still solid at the end is counted at $T_f$ (Step~5's correction). With the ice starting at
 $0\dC$:
-\begin{multline}
-0 = \big[m_{i,f}c_i + m_{w,f}c_w + (S_0 - m_{s,f})\,c_s\big]\,T_f - L_f\,(m_{i,f} - m_{i,0})\\
-+ \beta\,(m_{s,f} - m_{s,d,0}) + C_d\,(T_f - T_{d,0}) - L_f\,m_{wd}\,\psi(T_f)\\
-- m_{w,0}c_wT_{w,0} - S_0c_sT_{s,0} . \label{eq:s12-can}
-\end{multline}
+\begin{equation}
+\begin{split}
+0 = {}&\big[m_{i,f}c_i + m_{w,f}c_w + (S_0 - m_{s,f})\,c_s\big]\,T_f - L_f\,(m_{i,f} - m_{i,0})\\
+&+ \beta\,(m_{s,f} - m_{s,d,0}) + C_d\,(T_f - T_{d,0}) - L_f\,m_{wd}\,\psi(T_f)\\
+&- m_{w,0}c_wT_{w,0} - S_0c_sT_{s,0} .
+\end{split}
+\label{eq:s12-can}
+\end{equation}
 
 \begin{worked}{the rig and Can 2, left until everything settles}
 Rig numbers, with the drink at $28\dC$; ``measured diagram'' means the freezing curve, solubility and eutectic
 of the B8 report's model (\texttt{b8\_sim.py}) instead of \eqref{eq:s12-Tf}--\eqref{eq:s12-sat}.
 
-\smallskip
-{\small\centering
+\begin{center}\small
 \begin{tabular}{@{}lcccc@{}}
 \toprule
  & $T_f$ & ice left & solid salt left & drink frozen\\
@@ -1148,7 +1153,8 @@ With a cola, measured diagram & $-21.2\dC$ & 2.42\,kg & 40\,g & 96\,\%\\
 With a beer, dilute law & $-20.3\dC$ & 2.46\,kg & 0 & 90\,\%\\
 With a beer, measured diagram & $-21.2\dC$ & 2.42\,kg & 40\,g & 91\,\%\\
 \bottomrule
-\end{tabular}\par}
+\end{tabular}
+\end{center}
 
 \smallskip
 The drink gives the bath about 160\,kJ, cooling from $28\dC$ and freezing, which melts 0.4--0.5\,kg of ice.
@@ -1162,15 +1168,21 @@ way a can left until everything settles is mostly ice: take it out at $5\dC$.
 \para{Derivation.} Integrating the bath balance \eqref{eq:s11-balance} from $0$ to $t_f$, for constant
 $c_i$, $c_w$, $L_f$ and $\beta$, the latent and dissolution terms integrate exactly, but the sensible term does
 not, because $\Ceff$ changes as ice melts:
-\begin{multline}
-\int_0^{t_f}\big\{H[\Troom - T(t)] + G[T_d(t) - T(t)]\big\}\,\dd t\\
-= \int_0^{t_f}\Ceff(t)\,\dot T(t)\,\dd t - L_f(m_{i,f} - m_{i,0}) + \beta(m_{s,f} - m_{s,d,0}) . \label{eq:s12-integral}
-\end{multline}
+\begin{equation}
+\begin{split}
+&\int_0^{t_f}\big\{H[\Troom - T(t)] + G[T_d(t) - T(t)]\big\}\,\dd t\\
+&\qquad= \int_0^{t_f}\Ceff(t)\,\dot T(t)\,\dd t - L_f(m_{i,f} - m_{i,0}) + \beta(m_{s,f} - m_{s,d,0}) .
+\end{split}
+\label{eq:s12-integral}
+\end{equation}
 The first edition's endpoint formula,
-\begin{multline}
-\int_0^{t_f} H[\Troom - T(t)]\,\dd t\\
-\overset{\text{earlier approximation}}{\approx} C_fT_f - C_0T_0 - L_f(m_{i,f} - m_{i,0}) + \beta(m_{s,f} - m_{s,d,0}), \label{eq:s12-earlier}
-\end{multline}
+\begin{equation}
+\begin{split}
+&\int_0^{t_f} H[\Troom - T(t)]\,\dd t\\
+&\qquad\overset{\text{earlier approximation}}{\approx} C_fT_f - C_0T_0 - L_f(m_{i,f} - m_{i,0}) + \beta(m_{s,f} - m_{s,d,0}),
+\end{split}
+\label{eq:s12-earlier}
+\end{equation}
 is not generally valid when $\Ceff$ varies.
 
 \begin{correction}
@@ -1213,10 +1225,13 @@ Differentiating with the product rule, and using $\dot m_w = -\dot m_i$:
 \dot U_{\mathrm{approx}} = (m_ic_i + m_wc_w)\,\dot T + \big[(c_i - c_w)(T - T_{\mathrm{ref}}) - L_f\big]\,\dot m_i + \beta\,\dot m_s . \label{eq:refine-Udot}
 \end{equation}
 Setting this equal to the heat flowing in, now including the drink's:
-\begin{multline}
-H(\Troom - T) + G(T_d - T)\\
-= (m_ic_i + m_wc_w)\,\dot T - \big[L_f + (c_w - c_i)(T - T_{\mathrm{ref}})\big]\,\dot m_i + \beta\,\dot m_s . \label{eq:refine-balance}
-\end{multline}
+\begin{equation}
+\begin{split}
+&H(\Troom - T) + G(T_d - T)\\
+&\qquad= (m_ic_i + m_wc_w)\,\dot T - \big[L_f + (c_w - c_i)(T - T_{\mathrm{ref}})\big]\,\dot m_i + \beta\,\dot m_s .
+\end{split}
+\label{eq:refine-balance}
+\end{equation}
 At $T = T_{\mathrm{ref}}$ this is the simpler balance \eqref{eq:s11-balance}. Elsewhere the heat to melt a
 kilogram of ice is $L_f + (c_w - c_i)(T - T_{\mathrm{ref}})$, smaller below zero (Kirchhoff's law): at
 $-15\dC$, $333\,500 - 2080\times15 = 302\,300$\,J\,kg$^{-1}$, 9\,\% less. A more precise model would add the
@@ -1231,12 +1246,15 @@ drink together, with $U_D$ from \eqref{eq:s10-UD} and the undissolved salt's sen
 \boxed{\,\int_0^{t_f} H(\Troom - T)\,\dd t = \big[U_{\mathrm{approx}} + (S_0 - m_s)\,c_s(T - T_{\mathrm{ref}}) + U_D\big]_0^{t_f}\,} \label{eq:refine-integral}
 \end{equation}
 Written out, with the bath at $T_0$ and the drink at $T_{d,0}$ at the start:
-\begin{multline}
-\int_0^{t_f} H(\Troom - T)\,\dd t = m_{i,f}c_i(T_f - T_{\mathrm{ref}}) - m_{i,0}c_i(T_0 - T_{\mathrm{ref}})\\
-+ m_{w,f}\big[L_f + c_w(T_f - T_{\mathrm{ref}})\big] - m_{w,0}\big[L_f + c_w(T_0 - T_{\mathrm{ref}})\big]\\
-+ \beta\,(m_{s,f} - m_{s,d,0}) + (S_0 - m_{s,f})\,c_s(T_f - T_{\mathrm{ref}}) - S_0\,c_s(T_0 - T_{\mathrm{ref}})\\
-+ C_d\,(T_{d,f} - T_{d,0}) - L_f\,m_{wd}\,\psi(T_{d,f}) . \label{eq:refine-expanded}
-\end{multline}
+\begin{equation}
+\begin{split}
+\int_0^{t_f} H(\Troom - T)\,\dd t = {}& m_{i,f}c_i(T_f - T_{\mathrm{ref}}) - m_{i,0}c_i(T_0 - T_{\mathrm{ref}})\\
+&+ m_{w,f}\big[L_f + c_w(T_f - T_{\mathrm{ref}})\big] - m_{w,0}\big[L_f + c_w(T_0 - T_{\mathrm{ref}})\big]\\
+&+ \beta\,(m_{s,f} - m_{s,d,0}) + (S_0 - m_{s,f})\,c_s(T_f - T_{\mathrm{ref}}) - S_0\,c_s(T_0 - T_{\mathrm{ref}})\\
+&+ C_d\,(T_{d,f} - T_{d,0}) - L_f\,m_{wd}\,\psi(T_{d,f}) .
+\end{split}
+\label{eq:refine-expanded}
+\end{equation}
 This is the preferred endpoint equation for the idealised, constant-coefficient model. For a perfectly
 insulated box, set the left side to zero. For a real box over a finite time, the left side depends on the
 unknown history of $T$ and cannot be found from the endpoints alone.
