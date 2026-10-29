@@ -5,6 +5,7 @@ name: B8 report
 #   b8-cold-drink/B8-salted-ice-bath.pdf   the report (XeLaTeX)
 #   b8-cold-drink/B8-model-derivation.pdf  the model derivation (pdfLaTeX)
 #   b8-cold-drink/sypt_salt_ice_model.pdf  the salt-ice-water model notes (pdfLaTeX)
+#   b8-cold-drink/B8_strong_case.pdf       the strong case (XeLaTeX)
 # It runs by itself when a push to main changes their sources; for another
 # branch, or to rebuild by hand: Actions -> B8 report -> Run workflow.  The
 # check workflow (b8-check.yml) stays free of LaTeX.
@@ -12,7 +13,7 @@ name: B8 report
 on:
   push:
     branches: [main]
-    paths: ['b8-cold-drink/B8-salted-ice-bath.tex', 'b8-cold-drink/B8-model-derivation.tex', 'b8-cold-drink/sypt_salt_ice_model.tex', 'b8-cold-drink/figs/**', '.github/workflows/b8-report.yml']
+    paths: ['b8-cold-drink/B8-salted-ice-bath.tex', 'b8-cold-drink/B8-model-derivation.tex', 'b8-cold-drink/sypt_salt_ice_model.tex', 'b8-cold-drink/B8_strong_case.tex', 'b8-cold-drink/figs/**', '.github/workflows/b8-report.yml']
   workflow_dispatch:
 
 permissions:
@@ -79,6 +80,15 @@ jobs:
             echo "::error::the salt-ice-water notes have undefined references"; exit 1
           fi
 
+      - name: Build the strong case (XeLaTeX)
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct -- B8_strong_case.tex)" FORCE_SOURCE_DATE=1
+          for pass in 1 2 3; do
+            xelatex -interaction=nonstopmode -halt-on-error B8_strong_case.tex > /dev/null \
+              || { grep -A8 '^!' B8_strong_case.log; exit 1; }   # show the TeX error
+          done
+          grep -E "Output written|Overfull|Rerun" B8_strong_case.log || true
+
       - name: Keep the PDFs and the logs with the run
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,13 +101,15 @@ jobs:
             b8-cold-drink/B8-model-derivation.log
             b8-cold-drink/sypt_salt_ice_model.pdf
             b8-cold-drink/sypt_salt_ice_model.log
+            b8-cold-drink/B8_strong_case.pdf
+            b8-cold-drink/B8_strong_case.log
 
       - name: Commit the PDFs if they changed
         id: commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add B8-salted-ice-bath.pdf B8-model-derivation.pdf sypt_salt_ice_model.pdf
+          git add B8-salted-ice-bath.pdf B8-model-derivation.pdf sypt_salt_ice_model.pdf B8_strong_case.pdf
           if git diff --cached --quiet; then
             echo "The PDFs are unchanged."
             exit 0

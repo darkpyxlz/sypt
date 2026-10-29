@@ -23,6 +23,7 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 | `B8-salted-ice-bath.tex` / `.pdf` | The report: the physics derived from first principles, then what both models say. |
 | `B8-model-derivation.tex` / `.pdf` | The lumped drink-and-bath model (no stirrer) derived step by step, every step explained, with physical constants and handbook properties put in as numbers. It ends in the closed equation set and the closed-form special cases. |
 | `sypt_salt_ice_model.tex` / `.pdf` | The salt–ice–water model notes, second edition: every step derived and explained, now with the can (part-filled, upright or lying, held under or floating) and an ethanol model of the drink. |
+| `B8_strong_case.tex` / `.pdf` | The strong case for B8, built with XeLaTeX by the same workflow. |
 | `figs/`, `fonts/` | Figures and fonts for the report. |
 
 Keep everything in this one folder. The programs and the `.tex` find the other
