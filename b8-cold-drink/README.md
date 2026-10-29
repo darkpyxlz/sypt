@@ -22,7 +22,7 @@ In the rig, the bath is in a glass tank, and the tank sits inside a styrofoam bo
 | `b8_sim.py` | The older one-lump equilibrium model behind the report (unchanged). |
 | `B8-salted-ice-bath.tex` / `.pdf` | The report: the physics derived from first principles, then what both models say. |
 | `B8-model-derivation.tex` / `.pdf` | The lumped drink-and-bath model (no stirrer) derived step by step, every step explained, with physical constants and handbook properties put in as numbers. It ends in the closed equation set and the closed-form special cases. |
-| `sypt_salt_ice_model.pdf` | The salt–ice model write-up (PDF only), linked from the web simulator. |
+| `sypt_salt_ice_model.tex` / `.pdf` | The salt–ice–water model notes, second edition: every step derived and explained, now with the can (part-filled, upright or lying, held under or floating) and an ethanol model of the drink. |
 | `figs/`, `fonts/` | Figures and fonts for the report. |
 
 Keep everything in this one folder. The programs and the `.tex` find the other
@@ -439,16 +439,18 @@ mass transfer, explaining every equation; Part II gives what each model says; Pa
 experiments. Its figure `figs/f9_spreading.pdf` is redrawn by
 `python3 b8_simple.py --report-figure`.
 
-The same workflow builds the second document, `B8-model-derivation.pdf`, and commits it
-alongside. That one uses only standard packages and pdfLaTeX:
+The same workflow builds the two other documents, `B8-model-derivation.pdf` and
+`sypt_salt_ice_model.pdf`, and commits them alongside. Both use only standard packages and
+pdfLaTeX:
 
 ```
 pdflatex B8-model-derivation.tex
 pdflatex B8-model-derivation.tex
+pdflatex sypt_salt_ice_model.tex       # three times, for its contents and equation numbers
 ```
 
-On Overleaf it compiles with the default compiler. Both PDFs are linked from the top of
-the web simulator.
+On Overleaf they compile with the default compiler. All three PDFs are linked from the top
+of the web simulator.
 
 ## Fonts
 
