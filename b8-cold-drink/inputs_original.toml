@@ -1,0 +1,42 @@
+# inputs_original.toml -- the physics of the first b8_simple.py (October 2026).
+#
+#     python3 b8_simple.py --inputs inputs_original.toml
+#
+# gives that version's numbers ("drink reaches 5 C 178 s after it goes in").
+# Use it to see what the newer physics in inputs.toml changes.  Only the lines
+# that differ from inputs.toml are here; everything else is taken from it.
+
+[box]
+outside_air_h = inf           # no air films: the foam was the only resistance
+side_gap_h = inf
+lid_gap_h = inf
+foam_density = 0.0            # and it held no heat
+tank_on_floor = false         # the base was treated like the walls
+gaps_leak = 0.0               # and the box had no gaps
+
+[salt]
+dissolves_as = "hydrohalite"
+
+[drink]
+freezes = false
+lowering_time = 0.0           # the can dropped in at once
+
+[can]
+orientation = "upright"       # the can stood upright
+headspace = 0.0               # and its lid passed heat once under
+
+[can_heat_transfer]
+inside_power_law = false
+
+[heat_spreading]
+convection_factor = inf       # the bath was one well-mixed temperature
+
+[materials]
+ice_heat_capacity = 2000.0
+ice_heat_capacity_slope = 0.0
+brine_heat_capacity = [4180.0, -4400.0, 0.0]
+brine_density = [1000.0, 750.0]
+
+[phase_diagram]
+peritectic_w = 0.26285
+halite_solubility = [35.24409, 0.0338455]   # the Sigma-Aldrich fit from "sypt code"

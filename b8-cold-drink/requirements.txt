@@ -1,0 +1,4 @@
+# numpy 2.0 or later: b8_sim.py uses np.trapezoid
+numpy>=2.0
+scipy
+matplotlib

@@ -1,0 +1,33 @@
+# box_test.toml -- the box test: how fast heat leaks into the styrofoam box.
+#
+# The box is not a perfect insulator.  To measure its leak, fill the tank with
+# cold water only (no ice, no salt, no drink), put the lid on as it will be in a
+# real run (probe leads through the same gaps), and log the water temperature
+# for 3 hours.  Then run
+#     python3 b8_simple.py --inputs box_test.toml
+# with your water mass and starting temperature below, and change
+# [box] measured_UA until the simulated water matches your log (the app and the
+# web page have a slider and a box for it).  README.md also gives a formula.
+# Put the value you find in inputs.toml as [box] measured_UA.
+#
+# Only the lines that differ from inputs.toml are here.
+
+[water]
+mass = 5.0                    # weigh it
+start_temperature = 4.0       # from the fridge; probe it as the lid goes on
+
+[ice]
+mass = 0.0
+
+[salt]
+mass = 0.0
+
+[drink]
+goes_in_at = inf              # no drink
+
+[heat_spreading]
+convection_factor = inf       # water with no ice in it mixes itself; stir it before each reading
+
+[simulation]
+end_time = 10800.0            # 3 hours
+print_every = 600.0
