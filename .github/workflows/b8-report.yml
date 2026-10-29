@@ -44,7 +44,7 @@ jobs:
             texlive-fonts-recommended fonts-lmodern lmodern \
             fonts-inter fonts-jetbrains-mono tex-gyre
           # the strong case looks fonts up by name: make the repo's Space Grotesk visible too
-          mkdir -p ~/.local/share/fonts && cp b8-cold-drink/fonts/SpaceGrotesk-*.ttf ~/.local/share/fonts/ && fc-cache -f > /dev/null
+          mkdir -p ~/.local/share/fonts && cp fonts/SpaceGrotesk-*.ttf ~/.local/share/fonts/ && fc-cache -f > /dev/null
           fc-list | grep -ci 'inter' || true
           # the report's maths font is the only one not in fonts/
           kpsewhich latinmodern-math.otf || fc-list | grep -i 'latin modern math'
